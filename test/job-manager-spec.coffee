@@ -41,6 +41,31 @@ describe 'JobManager', ->
 
         expect(@response.rawData).to.deep.equal 'abcd123'
 
+  describe '->getRequest', ->
+    context 'when called with a request', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'hairball'
+          metadata:
+            gross: true
+            responseId: 'some-response'
+          rawData: 'abcd123'
+
+        @sut.createRequest options, done
+
+      beforeEach (done) ->
+        @sut.getRequest (error, @request) =>
+          done error
+
+      it 'should return a request', ->
+        expect(@request).to.exist
+
+        expect(@request.metadata).to.deep.equal
+          gross: true
+          responseId: 'some-response'
+
+        expect(@request.rawData).to.deep.equal 'abcd123'
+
   describe '->createRequest', ->
     context 'when called with a request', ->
       beforeEach (done) ->

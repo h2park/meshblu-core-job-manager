@@ -8,8 +8,8 @@ class JobManager
     @requestQueue ?= 'request'
     @responseQueue ?= 'response'
 
-  getResponse: (key, callback) =>
-    @client.brpop key, @timeoutSeconds, (error, result) =>
+  getResponse: (responseId, callback) =>
+    @client.brpop "#{@namespace}:#{@responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback null, null unless result?
 

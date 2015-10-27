@@ -16,6 +16,31 @@ describe 'JobManager', ->
       namespace: 'test'
       timeoutSeconds: 1
 
+  describe '->getResponse', ->
+    context 'when called with a request', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'hairball'
+          metadata:
+            gross: true
+            responseId: 'some-response'
+          rawData: 'abcd123'
+
+        @sut.createResponse options, done
+
+      beforeEach (done) ->
+        @sut.getResponse 'hairball', (@error, @response) =>
+          done()
+
+      it 'should return a response', ->
+        expect(@response).to.exist
+
+        expect(@response.metadata).to.deep.equal
+          gross: true
+          responseId: 'some-response'
+
+        expect(@response.rawData).to.deep.equal 'abcd123'
+
   describe '->createRequest', ->
     context 'when called with a request', ->
       beforeEach (done) ->
@@ -44,9 +69,25 @@ describe 'JobManager', ->
           done()
 
       it 'should put the data in its place', (done) ->
-        @client.hget 'test:some-response', 'request:data', (error, metadataStr) =>
-          metadata = JSON.parse metadataStr
-          expect(metadata).to.be.null
+        @client.hget 'test:some-response', 'request:data', (error, dataStr) =>
+          data = JSON.parse dataStr
+          expect(data).to.be.null
+          done()
+
+    context 'when called with data', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'some-response'
+          metadata: {}
+          data:
+            'tunnel-collapse': 'just a miner problem'
+
+        @sut.createRequest options, done
+
+      it 'should stringify the data', (done) ->
+        @client.hget 'test:some-response', 'request:data', (error, dataStr) =>
+          data = JSON.parse dataStr
+          expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()
 
   describe '->createResponse', ->
@@ -80,4 +121,20 @@ describe 'JobManager', ->
         @client.hget 'test:some-response', 'response:data', (error, metadataStr) =>
           metadata = JSON.parse metadataStr
           expect(metadata).to.be.null
+          done()
+
+    context 'when called with data', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'some-response'
+          metadata: {}
+          data:
+            'tunnel-collapse': 'just a miner problem'
+
+        @sut.createResponse options, done
+
+      it 'should stringify the data', (done) ->
+        @client.hget 'test:some-response', 'response:data', (error, dataStr) =>
+          data = JSON.parse dataStr
+          expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()

@@ -1,9 +1,11 @@
+_     = require 'lodash'
 async = require 'async'
 debug = require('debug')('meshblu-http-server:redis-job')
 
 class JobManager
   constructor: (options={}) ->
-    {@namespace,@client,@timeoutSeconds} = options
+    {@namespace,client,@timeoutSeconds} = options
+    @client = _.bindAll client
     {@requestQueue,@responseQueue} = options
     @requestQueue ?= 'request'
     @responseQueue ?= 'response'

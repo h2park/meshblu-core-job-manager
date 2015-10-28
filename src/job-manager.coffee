@@ -1,6 +1,6 @@
 _     = require 'lodash'
 async = require 'async'
-debug = require('debug')('meshblu-http-server:redis-job')
+debug = require('debug')('meshblu-core-job-manager:job-manager')
 
 class JobManager
   constructor: (options={}) ->
@@ -11,7 +11,7 @@ class JobManager
     @responseQueue ?= 'response'
 
   getResponse: (responseId, callback) =>
-    debug "#{@namespace}:#{@responseQueue}:#{responseId}"
+    debug '@client.brpop', "#{@namespace}:#{@responseQueue}:#{responseId}"
     @client.brpop "#{@namespace}:#{@responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
       return callback error if error?
 
@@ -70,6 +70,7 @@ class JobManager
     rawData ?= JSON.stringify data
 
     debug "@client.hset", "#{@namespace}:#{responseId}", 'response:metadata', metadataStr
+    debug "@client.lpush", "#{@namespace}:#{@responseQueue}#{responseId}", "#{@namespace}:#{responseId}"
     async.series [
       async.apply @client.hset, "#{@namespace}:#{responseId}", 'response:metadata', metadataStr
       async.apply @client.hset, "#{@namespace}:#{responseId}", 'response:data', rawData

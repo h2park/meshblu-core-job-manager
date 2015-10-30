@@ -38,7 +38,6 @@ class JobManager
     ], callback
 
   getRequest: (requestQueues, callback) =>
-    requestQueue = _.first requestQueues
     queues = _.map requestQueues, (queue) => "#{queue}:queue"
     debug '@client.brpop', queues...
     @client.brpop queues..., @timeoutSeconds, (error, result) =>

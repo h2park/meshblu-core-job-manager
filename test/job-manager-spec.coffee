@@ -1,7 +1,9 @@
-_         = require 'lodash'
-async     = require 'async'
-redis = require 'fakeredis'
-uuid      = require 'uuid'
+_       = require 'lodash'
+async   = require 'async'
+redis   = require 'fakeredis'
+RedisNS = require '@octoblu/redis-ns'
+
+uuid  = require 'uuid'
 JobManager = require '../src/job-manager'
 
 describe 'JobManager', ->
@@ -9,7 +11,7 @@ describe 'JobManager', ->
     new JobManager
 
   beforeEach ->
-    @client = _.bindAll redis.createClient uuid.v4()
+    @client = _.bindAll new RedisNS 'ns', redis.createClient(uuid.v4())
 
     @sut = new JobManager
       client: @client

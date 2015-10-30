@@ -6,32 +6,41 @@ class JobManager
   constructor: (options={}) ->
     {client,@timeoutSeconds} = options
     @client = _.bindAll client
-    {@requestQueue,@responseQueue} = options
-    @requestQueue ?= 'request'
-    @responseQueue ?= 'response'
 
-  getResponse: (responseId, callback) =>
-    debug '@client.brpop', "#{@responseQueue}:#{responseId}"
-    @client.brpop "#{@responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
-      return callback error if error?
+  createRequest: (requestQueue, options, callback) =>
+    {metadata,data,responseId,rawData} = options
+    data ?= null
 
-      return callback null, null unless result?
+    metadataStr = JSON.stringify metadata
+    rawData ?= JSON.stringify data
 
-      [channel,key] = result
+    debug "@client.hset", "#{responseId}", 'request:metadata', metadataStr
+    debug '@client.lpush', "#{requestQueue}:queue"
+    async.series [
+      async.apply @client.hset, "#{responseId}", 'request:metadata', metadataStr
+      async.apply @client.hset, "#{responseId}", 'request:data', rawData
+      async.apply @client.lpush, "#{requestQueue}:queue", "#{responseId}"
+    ], callback
 
-      async.parallel
-        metadata: async.apply @client.hget, key, 'response:metadata'
-        data: async.apply @client.hget, key, 'response:data'
-      , (error, result) =>
-        return callback error if error?
+  createResponse: (responseQueue, options, callback)=>
+    {metadata,data,responseId,rawData} = options
+    data ?= null
 
-        callback null,
-          metadata: JSON.parse result.metadata
-          rawData: result.data
+    metadataStr = JSON.stringify metadata
+    rawData ?= JSON.stringify data
 
-  getRequest: (callback) =>
-    debug '@client.brpop', "#{@requestQueue}:queue"
-    @client.brpop "#{@requestQueue}:queue", @timeoutSeconds, (error, result) =>
+    debug "@client.hset", "#{responseId}", 'response:metadata', metadataStr
+    debug "@client.lpush", "#{responseQueue}#{responseId}", "#{responseId}"
+    async.series [
+      async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
+      async.apply @client.hset, "#{responseId}", 'response:data', rawData
+      async.apply @client.lpush, "#{responseQueue}:#{responseId}", "#{responseId}"
+    ], callback
+
+  getRequest: (requestQueues, callback) =>
+    requestQueue = _.first requestQueues
+    debug '@client.brpop', "#{requestQueue}:queue"
+    @client.brpop "#{requestQueue}:queue", @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback null, null unless result?
 
@@ -47,34 +56,23 @@ class JobManager
           metadata: JSON.parse result.metadata
           rawData: result.data
 
-  createRequest: (options, callback) =>
-    {metadata,data,responseId,rawData} = options
-    data ?= null
+  getResponse: (responseQueue, responseId, callback) =>
+    debug '@client.brpop', "#{responseQueue}:#{responseId}"
+    @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
+      return callback error if error?
 
-    metadataStr = JSON.stringify metadata
-    rawData ?= JSON.stringify data
+      return callback null, null unless result?
 
-    debug "@client.hset", "#{responseId}", 'request:metadata', metadataStr
-    debug '@client.lpush', "#{@requestQueue}:queue"
-    async.series [
-      async.apply @client.hset, "#{responseId}", 'request:metadata', metadataStr
-      async.apply @client.hset, "#{responseId}", 'request:data', rawData
-      async.apply @client.lpush, "#{@requestQueue}:queue", "#{responseId}"
-    ], callback
+      [channel,key] = result
 
-  createResponse: (options, callback)=>
-    {metadata,data,responseId,rawData} = options
-    data ?= null
+      async.parallel
+        metadata: async.apply @client.hget, key, 'response:metadata'
+        data: async.apply @client.hget, key, 'response:data'
+      , (error, result) =>
+        return callback error if error?
 
-    metadataStr = JSON.stringify metadata
-    rawData ?= JSON.stringify data
-
-    debug "@client.hset", "#{responseId}", 'response:metadata', metadataStr
-    debug "@client.lpush", "#{@responseQueue}#{responseId}", "#{responseId}"
-    async.series [
-      async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
-      async.apply @client.hset, "#{responseId}", 'response:data', rawData
-      async.apply @client.lpush, "#{@responseQueue}:#{responseId}", "#{responseId}"
-    ], callback
+        callback null,
+          metadata: JSON.parse result.metadata
+          rawData: result.data
 
 module.exports = JobManager

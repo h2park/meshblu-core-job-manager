@@ -15,56 +15,6 @@ describe 'JobManager', ->
       client: @client
       timeoutSeconds: 1
 
-  describe '->getResponse', ->
-    context 'when called with a request', ->
-      beforeEach (done) ->
-        options =
-          responseId: 'hairball'
-          metadata:
-            gross: true
-            responseId: 'some-response'
-          rawData: 'abcd123'
-
-        @sut.createResponse options, done
-
-      beforeEach (done) ->
-        @sut.getResponse 'hairball', (@error, @response) =>
-          done()
-
-      it 'should return a response', ->
-        expect(@response).to.exist
-
-        expect(@response.metadata).to.deep.equal
-          gross: true
-          responseId: 'some-response'
-
-        expect(@response.rawData).to.deep.equal 'abcd123'
-
-  describe '->getRequest', ->
-    context 'when called with a request', ->
-      beforeEach (done) ->
-        options =
-          responseId: 'hairball'
-          metadata:
-            gross: true
-            responseId: 'some-response'
-          rawData: 'abcd123'
-
-        @sut.createRequest options, done
-
-      beforeEach (done) ->
-        @sut.getRequest (error, @request) =>
-          done error
-
-      it 'should return a request', ->
-        expect(@request).to.exist
-
-        expect(@request.metadata).to.deep.equal
-          gross: true
-          responseId: 'some-response'
-
-        expect(@request.rawData).to.deep.equal 'abcd123'
-
   describe '->createRequest', ->
     context 'when called with a request', ->
       beforeEach (done) ->
@@ -74,7 +24,7 @@ describe 'JobManager', ->
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response'
 
-        @sut.createRequest options, done
+        @sut.createRequest 'request', options, done
 
       it 'should place the job in a queue', (done) ->
         @timeout 3000
@@ -106,7 +56,7 @@ describe 'JobManager', ->
           data:
             'tunnel-collapse': 'just a miner problem'
 
-        @sut.createRequest options, done
+        @sut.createRequest 'request', options, done
 
       it 'should stringify the data', (done) ->
         @client.hget 'some-response', 'request:data', (error, dataStr) =>
@@ -123,7 +73,7 @@ describe 'JobManager', ->
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response'
 
-        @sut.createResponse options, done
+        @sut.createResponse 'response', options, done
 
       it 'should place the job in a queue', (done) ->
         @timeout 3000
@@ -155,10 +105,60 @@ describe 'JobManager', ->
           data:
             'tunnel-collapse': 'just a miner problem'
 
-        @sut.createResponse options, done
+        @sut.createResponse 'request', options, done
 
       it 'should stringify the data', (done) ->
         @client.hget 'some-response', 'response:data', (error, dataStr) =>
           data = JSON.parse dataStr
           expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()
+
+  describe '->getRequest', ->
+    context 'when called with a request', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'hairball'
+          metadata:
+            gross: true
+            responseId: 'some-response'
+          rawData: 'abcd123'
+
+        @sut.createRequest 'request', options, done
+
+      beforeEach (done) ->
+        @sut.getRequest ['request'], (error, @request) =>
+          done error
+
+      it 'should return a request', ->
+        expect(@request).to.exist
+
+        expect(@request.metadata).to.deep.equal
+          gross: true
+          responseId: 'some-response'
+
+        expect(@request.rawData).to.deep.equal 'abcd123'
+
+  describe '->getResponse', ->
+    context 'when called with a request', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'hairball'
+          metadata:
+            gross: true
+            responseId: 'some-response'
+          rawData: 'abcd123'
+
+        @sut.createResponse 'response', options, done
+
+      beforeEach (done) ->
+        @sut.getResponse 'response', 'hairball', (@error, @response) =>
+          done()
+
+      it 'should return a response', ->
+        expect(@response).to.exist
+
+        expect(@response.metadata).to.deep.equal
+          gross: true
+          responseId: 'some-response'
+
+        expect(@response.rawData).to.deep.equal 'abcd123'

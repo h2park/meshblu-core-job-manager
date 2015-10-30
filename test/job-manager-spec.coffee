@@ -138,6 +138,30 @@ describe 'JobManager', ->
 
         expect(@request.rawData).to.deep.equal 'abcd123'
 
+    context 'when called with a two queues', ->
+      beforeEach (done) ->
+        options =
+          responseId: 'hairball'
+          metadata:
+            gross: true
+            responseId: 'some-response'
+          rawData: 'abcd123'
+
+        @sut.createRequest 'request2', options, done
+
+      beforeEach (done) ->
+        @sut.getRequest ['request1', 'request2'], (error, @request) =>
+          done error
+
+      it 'should return a request', ->
+        expect(@request).to.exist
+
+        expect(@request.metadata).to.deep.equal
+          gross: true
+          responseId: 'some-response'
+
+        expect(@request.rawData).to.deep.equal 'abcd123'
+
   describe '->getResponse', ->
     context 'when called with a request', ->
       beforeEach (done) ->

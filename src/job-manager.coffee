@@ -39,8 +39,9 @@ class JobManager
 
   getRequest: (requestQueues, callback) =>
     requestQueue = _.first requestQueues
-    debug '@client.brpop', "#{requestQueue}:queue"
-    @client.brpop "#{requestQueue}:queue", @timeoutSeconds, (error, result) =>
+    queues = _.map requestQueues, (queue) => "#{queue}:queue"
+    debug '@client.brpop', queues...
+    @client.brpop queues..., @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback null, null unless result?
 

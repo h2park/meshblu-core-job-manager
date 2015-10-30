@@ -13,7 +13,6 @@ describe 'JobManager', ->
 
     @sut = new JobManager
       client: @client
-      namespace: 'test'
       timeoutSeconds: 1
 
   describe '->getResponse', ->
@@ -79,14 +78,14 @@ describe 'JobManager', ->
 
       it 'should place the job in a queue', (done) ->
         @timeout 3000
-        @client.brpop 'test:request:queue', 1, (error, result) =>
+        @client.brpop 'request:queue', 1, (error, result) =>
           return done(error) if error?
           [channel, responseKey] = result
-          expect(responseKey).to.deep.equal 'test:some-response'
+          expect(responseKey).to.deep.equal 'some-response'
           done()
 
       it 'should put the metadata in its place', (done) ->
-        @client.hget 'test:some-response', 'request:metadata', (error, metadataStr) =>
+        @client.hget 'some-response', 'request:metadata', (error, metadataStr) =>
           metadata = JSON.parse metadataStr
           expect(metadata).to.deep.equal
             duel: "i'm just in it for the glove slapping"
@@ -94,7 +93,7 @@ describe 'JobManager', ->
           done()
 
       it 'should put the data in its place', (done) ->
-        @client.hget 'test:some-response', 'request:data', (error, dataStr) =>
+        @client.hget 'some-response', 'request:data', (error, dataStr) =>
           data = JSON.parse dataStr
           expect(data).to.be.null
           done()
@@ -110,7 +109,7 @@ describe 'JobManager', ->
         @sut.createRequest options, done
 
       it 'should stringify the data', (done) ->
-        @client.hget 'test:some-response', 'request:data', (error, dataStr) =>
+        @client.hget 'some-response', 'request:data', (error, dataStr) =>
           data = JSON.parse dataStr
           expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()
@@ -128,14 +127,14 @@ describe 'JobManager', ->
 
       it 'should place the job in a queue', (done) ->
         @timeout 3000
-        @client.brpop 'test:response:some-response', 1, (error, result) =>
+        @client.brpop 'response:some-response', 1, (error, result) =>
           return done(error) if error?
           [channel, responseKey] = result
-          expect(responseKey).to.deep.equal 'test:some-response'
+          expect(responseKey).to.deep.equal 'some-response'
           done()
 
       it 'should put the metadata in its place', (done) ->
-        @client.hget 'test:some-response', 'response:metadata', (error, metadataStr) =>
+        @client.hget 'some-response', 'response:metadata', (error, metadataStr) =>
           metadata = JSON.parse metadataStr
           expect(metadata).to.deep.equal
             duel: "i'm just in it for the glove slapping"
@@ -143,7 +142,7 @@ describe 'JobManager', ->
           done()
 
       it 'should put the data in its place', (done) ->
-        @client.hget 'test:some-response', 'response:data', (error, metadataStr) =>
+        @client.hget 'some-response', 'response:data', (error, metadataStr) =>
           metadata = JSON.parse metadataStr
           expect(metadata).to.be.null
           done()
@@ -159,7 +158,7 @@ describe 'JobManager', ->
         @sut.createResponse options, done
 
       it 'should stringify the data', (done) ->
-        @client.hget 'test:some-response', 'response:data', (error, dataStr) =>
+        @client.hget 'some-response', 'response:data', (error, dataStr) =>
           data = JSON.parse dataStr
           expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()

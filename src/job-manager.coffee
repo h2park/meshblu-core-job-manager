@@ -4,15 +4,15 @@ debug = require('debug')('meshblu-core-job-manager:job-manager')
 
 class JobManager
   constructor: (options={}) ->
-    {@namespace,client,@timeoutSeconds} = options
+    {client,@timeoutSeconds} = options
     @client = _.bindAll client
     {@requestQueue,@responseQueue} = options
     @requestQueue ?= 'request'
     @responseQueue ?= 'response'
 
   getResponse: (responseId, callback) =>
-    debug '@client.brpop', "#{@namespace}:#{@responseQueue}:#{responseId}"
-    @client.brpop "#{@namespace}:#{@responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
+    debug '@client.brpop', "#{@responseQueue}:#{responseId}"
+    @client.brpop "#{@responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
       return callback error if error?
 
       return callback null, null unless result?
@@ -30,8 +30,8 @@ class JobManager
           rawData: result.data
 
   getRequest: (callback) =>
-    debug '@client.brpop', "#{@namespace}:#{@requestQueue}:queue"
-    @client.brpop "#{@namespace}:#{@requestQueue}:queue", @timeoutSeconds, (error, result) =>
+    debug '@client.brpop', "#{@requestQueue}:queue"
+    @client.brpop "#{@requestQueue}:queue", @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback null, null unless result?
 
@@ -54,12 +54,12 @@ class JobManager
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 
-    debug "@client.hset", "#{@namespace}:#{responseId}", 'request:metadata', metadataStr
-    debug '@client.lpush', "#{@namespace}:#{@requestQueue}:queue"
+    debug "@client.hset", "#{responseId}", 'request:metadata', metadataStr
+    debug '@client.lpush', "#{@requestQueue}:queue"
     async.series [
-      async.apply @client.hset, "#{@namespace}:#{responseId}", 'request:metadata', metadataStr
-      async.apply @client.hset, "#{@namespace}:#{responseId}", 'request:data', rawData
-      async.apply @client.lpush, "#{@namespace}:#{@requestQueue}:queue", "#{@namespace}:#{responseId}"
+      async.apply @client.hset, "#{responseId}", 'request:metadata', metadataStr
+      async.apply @client.hset, "#{responseId}", 'request:data', rawData
+      async.apply @client.lpush, "#{@requestQueue}:queue", "#{responseId}"
     ], callback
 
   createResponse: (options, callback)=>
@@ -69,12 +69,12 @@ class JobManager
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 
-    debug "@client.hset", "#{@namespace}:#{responseId}", 'response:metadata', metadataStr
-    debug "@client.lpush", "#{@namespace}:#{@responseQueue}#{responseId}", "#{@namespace}:#{responseId}"
+    debug "@client.hset", "#{responseId}", 'response:metadata', metadataStr
+    debug "@client.lpush", "#{@responseQueue}#{responseId}", "#{responseId}"
     async.series [
-      async.apply @client.hset, "#{@namespace}:#{responseId}", 'response:metadata', metadataStr
-      async.apply @client.hset, "#{@namespace}:#{responseId}", 'response:data', rawData
-      async.apply @client.lpush, "#{@namespace}:#{@responseQueue}:#{responseId}", "#{@namespace}:#{responseId}"
+      async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
+      async.apply @client.hset, "#{responseId}", 'response:data', rawData
+      async.apply @client.lpush, "#{@responseQueue}:#{responseId}", "#{responseId}"
     ], callback
 
 module.exports = JobManager

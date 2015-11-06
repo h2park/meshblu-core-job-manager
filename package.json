@@ -9,7 +9,8 @@
   "dependencies": {
     "async": "^1.5.0",
     "debug": "^2.2.0",
-    "lodash": "^3.10.1"
+    "lodash": "^3.10.1",
+    "uuid": "^2.0.1"
   },
   "devDependencies": {
     "@octoblu/redis-ns": "^0.1.1",
@@ -21,8 +22,7 @@
     "mocha": "^2.3.3",
     "mocha-istanbul": "^0.2.0",
     "sinon": "^1.17.2",
-    "sinon-chai": "^2.8.0",
-    "uuid": "^2.0.1"
+    "sinon-chai": "^2.8.0"
   },
   "scripts": {
     "test": "istanbul cover _mocha -- -R spec"

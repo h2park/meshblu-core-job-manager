@@ -11,10 +11,11 @@ describe 'JobManager', ->
     new JobManager
 
   beforeEach ->
-    @client = new RedisNS 'ns', redis.createClient()
+    @redisId = uuid.v4()
+    @client = new RedisNS 'ns', redis.createClient(@redisId)
 
     @sut = new JobManager
-      client: @client
+      client: new RedisNS 'ns', redis.createClient(@redisId)
       timeoutSeconds: 1
 
   describe '->createRequest', ->
@@ -132,6 +133,47 @@ describe 'JobManager', ->
           data = JSON.parse dataStr
           expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()
+
+  describe '->do', ->
+    context 'when called with a request', ->
+      beforeEach ->
+        options =
+          metadata:
+            duel: "i'm just in it for the glove slapping"
+            responseId: 'some-response-id'
+
+        @onResponse = sinon.spy()
+        @sut.do 'request', 'response', options, @onResponse
+
+      describe 'when it receives a response', ->
+        beforeEach (done) ->
+          jobManager = new JobManager
+            client: new RedisNS 'ns', redis.createClient(@redisId)
+            timeoutSeconds: 1
+
+          jobManager.getRequest ['request'], (error, request) =>
+            return done error if error?
+            @responseId = request.metadata.responseId
+
+            options =
+              metadata:
+                gross: true
+                responseId: @responseId
+              rawData: 'abcd123'
+
+            jobManager.createResponse 'response', options, done
+
+        it 'should yield the response', (done) ->
+          onResponseCalled = => @onResponse.called
+          wait = (callback) => _.delay callback, 10
+
+          async.until onResponseCalled, wait, =>
+            expect(@onResponse).to.have.been.calledWith null,
+              metadata:
+                gross: true
+                responseId: @responseId
+              rawData: 'abcd123'
+            done()
 
   describe '->getRequest', ->
     context 'when called with a request', ->

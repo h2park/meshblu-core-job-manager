@@ -1,6 +1,7 @@
 _     = require 'lodash'
 async = require 'async'
 debug = require('debug')('meshblu-core-job-manager:job-manager')
+uuid  = require 'uuid'
 
 class JobManager
   constructor: (options={}) ->
@@ -41,6 +42,14 @@ class JobManager
       async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{responseQueue}:#{responseId}", "#{responseId}"
     ], callback
+
+  do: (requestQueue, responseQueue, options, callback) =>
+    responseId = uuid.v4()
+    options = _.clone options
+    options.metadata = _.defaults responseId: responseId, options.metadata
+
+    @createRequest requestQueue, options, =>
+      @getResponse responseQueue, responseId, callback
 
   getRequest: (requestQueues, callback) =>
     queues = _.map requestQueues, (queue) => "#{queue}:queue"

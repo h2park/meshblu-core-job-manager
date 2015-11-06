@@ -8,7 +8,8 @@ class JobManager
     @client = _.bindAll client
 
   createRequest: (requestQueue, options, callback) =>
-    {metadata,data,responseId,rawData} = options
+    {metadata,data,rawData} = options
+    {responseId} = metadata
     data ?= null
 
     metadataStr = JSON.stringify metadata
@@ -16,14 +17,17 @@ class JobManager
 
     debug "@client.hset", "#{responseId}", 'request:metadata', metadataStr
     debug '@client.lpush', "#{requestQueue}:queue"
+
     async.series [
       async.apply @client.hset, "#{responseId}", 'request:metadata', metadataStr
       async.apply @client.hset, "#{responseId}", 'request:data', rawData
+      async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{requestQueue}:queue", "#{responseId}"
     ], callback
 
   createResponse: (responseQueue, options, callback)=>
-    {metadata,data,responseId,rawData} = options
+    {metadata,data,rawData} = options
+    {responseId} = metadata
     data ?= null
 
     metadataStr = JSON.stringify metadata
@@ -34,6 +38,7 @@ class JobManager
     async.series [
       async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
       async.apply @client.hset, "#{responseId}", 'response:data', rawData
+      async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{responseQueue}:#{responseId}", "#{responseId}"
     ], callback
 

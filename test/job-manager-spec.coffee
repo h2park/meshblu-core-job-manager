@@ -180,6 +180,25 @@ describe 'JobManager', ->
 
         expect(@request.rawData).to.deep.equal 'abcd123'
 
+    context 'when called with a timed out request', ->
+      beforeEach (done) ->
+        options =
+          metadata:
+            gross: true
+            responseId: 'hairball'
+          rawData: 'abcd123'
+
+        @sut.createRequest 'request2', options, (error) =>
+          return done error if error?
+          _.delay done, 1100
+
+      beforeEach (done) ->
+        @sut.getRequest ['request1', 'request2'], (error, @request) =>
+          done error
+
+      it 'should return a null request', ->
+        expect(@request).not.to.exist
+
   describe '->getResponse', ->
     context 'when called with a request', ->
       beforeEach (done) ->
@@ -203,3 +222,36 @@ describe 'JobManager', ->
           responseId: 'hairball'
 
         expect(@response.rawData).to.deep.equal 'abcd123'
+
+    context 'when called with a timed out response', ->
+      beforeEach (done) ->
+        options =
+          metadata:
+            gross: true
+            responseId: 'hairball'
+          rawData: 'abcd123'
+
+        @sut.createResponse 'request2', options, (error) =>
+          return done error if error?
+          _.delay done, 1100
+
+      beforeEach (done) ->
+        @sut.getResponse 'request2', 'hairball', (@error, @request) =>
+          done()
+
+      it 'should return an error', ->
+        expect(=> throw @error).to.throw 'Response timeout exceeded'
+
+      it 'should return a null request', ->
+        expect(@request).not.to.exist
+
+    context 'when called with and no response', ->
+      beforeEach (done) ->
+        @sut.getResponse 'request2', 'hairball', (@error, @request) =>
+          done()
+
+      it 'should return an error', ->
+        expect(=> throw @error).to.throw 'Response timeout exceeded'
+
+      it 'should return a null request', ->
+        expect(@request).not.to.exist

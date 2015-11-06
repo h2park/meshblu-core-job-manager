@@ -56,6 +56,7 @@ class JobManager
         data: async.apply @client.hget, key, 'request:data'
       , (error, result) =>
         return callback error if error?
+        return callback null, null unless result.metadata?
 
         callback null,
           metadata: JSON.parse result.metadata
@@ -65,8 +66,7 @@ class JobManager
     debug '@client.brpop', "#{responseQueue}:#{responseId}"
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
       return callback error if error?
-
-      return callback null, null unless result?
+      return callback new Error('Response timeout exceeded'), null unless result?
 
       [channel,key] = result
 
@@ -75,6 +75,7 @@ class JobManager
         data: async.apply @client.hget, key, 'response:data'
       , (error, result) =>
         return callback error if error?
+        return callback new Error('Response timeout exceeded'), null unless result.metadata?
 
         callback null,
           metadata: JSON.parse result.metadata

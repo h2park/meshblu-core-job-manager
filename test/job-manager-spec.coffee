@@ -176,6 +176,15 @@ describe 'JobManager', ->
             done()
 
   describe '->getRequest', ->
+    context 'when called with a string instead of an array', ->
+      beforeEach ->
+        @callback = sinon.spy()
+        @sut.getRequest 'hi', @callback
+
+      it 'should blow up', ->
+        [error] = @callback.firstCall.args
+        expect(=> throw error).to.throw 'First argument must be an array'
+
     context 'when called with a request', ->
       beforeEach (done) ->
         options =

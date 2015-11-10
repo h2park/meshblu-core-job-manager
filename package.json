@@ -1,6 +1,6 @@
 {
   "name": "meshblu-core-job-manager",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Meshblu Core Job Manager",
   "main": "index.js",
   "directories": {
@@ -25,7 +25,7 @@
     "sinon-chai": "^2.8.0"
   },
   "scripts": {
-    "test": "istanbul cover _mocha -- -R spec"
+    "test": "istanbul cover _mocha -- -R spec --require coffee-coverage/register-istanbul"
   },
   "repository": {
     "type": "git",

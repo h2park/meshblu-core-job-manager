@@ -52,6 +52,7 @@ class JobManager
       @getResponse responseQueue, responseId, callback
 
   getRequest: (requestQueues, callback) =>
+    return callback new Error 'First argument must be an array' unless _.isArray requestQueues
     queues = _.map requestQueues, (queue) => "#{queue}:queue"
     debug '@client.brpop', queues...
     @client.brpop queues..., @timeoutSeconds, (error, result) =>

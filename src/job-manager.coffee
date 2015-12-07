@@ -26,7 +26,7 @@ class JobManager
       async.apply @client.lpush, "#{requestQueue}:queue", "#{responseId}"
     ], callback
 
-  createResponse: (responseQueue, options, callback)=>
+  createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
     data ?= null
@@ -35,6 +35,7 @@ class JobManager
     rawData ?= JSON.stringify data
 
     debug "@client.hset", "#{responseId}", 'response:metadata', metadataStr
+    debug "@client.expire", "#{responseId}", @timeoutSeconds
     debug "@client.lpush", "#{responseQueue}:#{responseId}", "#{responseId}"
     async.series [
       async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
@@ -44,9 +45,9 @@ class JobManager
     ], callback
 
   do: (requestQueue, responseQueue, options, callback) =>
-    responseId = uuid.v4()
     options = _.clone options
-    options.metadata = _.defaults responseId: responseId, options.metadata
+    options.metadata.responseId ?= uuid.v4()
+    {responseId} = options.metadata
 
     @createRequest requestQueue, options, =>
       @getResponse responseQueue, responseId, callback

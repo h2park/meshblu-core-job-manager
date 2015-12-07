@@ -35,7 +35,7 @@ class JobManager
     rawData ?= JSON.stringify data
 
     debug "@client.hset", "#{responseId}", 'response:metadata', metadataStr
-    debug "@client.lpush", "#{responseQueue}#{responseId}", "#{responseId}"
+    debug "@client.lpush", "#{responseQueue}:#{responseId}", "#{responseId}"
     async.series [
       async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
       async.apply @client.hset, "#{responseId}", 'response:data', rawData

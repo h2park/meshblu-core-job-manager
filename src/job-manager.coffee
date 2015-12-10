@@ -5,8 +5,7 @@ uuid  = require 'uuid'
 
 class JobManager
   constructor: (options={}) ->
-    {client,@timeoutSeconds} = options
-    @client = _.bindAll client
+    {@client,@timeoutSeconds} = options
 
   createRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData} = options

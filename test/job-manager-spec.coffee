@@ -12,10 +12,10 @@ describe 'JobManager', ->
 
   beforeEach ->
     @redisId = uuid.v4()
-    @client = new RedisNS 'ns', redis.createClient(@redisId)
+    @client = _.bindAll new RedisNS 'ns', redis.createClient(@redisId)
 
     @sut = new JobManager
-      client: new RedisNS 'ns', redis.createClient(@redisId)
+      client: _.bindAll new RedisNS 'ns', redis.createClient(@redisId)
       timeoutSeconds: 1
 
   describe '->createRequest', ->
@@ -148,7 +148,7 @@ describe 'JobManager', ->
       describe 'when it receives a response', ->
         beforeEach (done) ->
           jobManager = new JobManager
-            client: new RedisNS 'ns', redis.createClient(@redisId)
+            client: _.bindAll new RedisNS 'ns', redis.createClient(@redisId)
             timeoutSeconds: 1
 
           jobManager.getRequest ['request'], (error, request) =>

@@ -6,6 +6,7 @@ uuid  = require 'uuid'
 class JobManager
   constructor: (options={}) ->
     {@client,@timeoutSeconds} = options
+    throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
 
   createRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData} = options

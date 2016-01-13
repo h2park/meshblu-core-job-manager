@@ -7,9 +7,6 @@ uuid  = require 'uuid'
 JobManager = require '../src/job-manager'
 
 describe 'JobManager', ->
-  it 'should exist', ->
-    new JobManager
-
   beforeEach ->
     @redisId = uuid.v4()
     @client = _.bindAll new RedisNS 'ns', redis.createClient(@redisId)
@@ -17,6 +14,11 @@ describe 'JobManager', ->
     @sut = new JobManager
       client: _.bindAll new RedisNS 'ns', redis.createClient(@redisId)
       timeoutSeconds: 1
+
+  describe 'when instantiated without a timeout', ->
+    it 'should blow up', ->
+      expect(=> new JobManager).to.throw 'JobManager constructor is missing "timeoutSeconds"'
+
 
   describe '->createRequest', ->
     context 'when called with a request', ->

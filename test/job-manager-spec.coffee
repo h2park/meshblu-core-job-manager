@@ -17,8 +17,11 @@ describe 'JobManager', ->
 
   describe 'when instantiated without a timeout', ->
     it 'should blow up', ->
-      expect(=> new JobManager).to.throw 'JobManager constructor is missing "timeoutSeconds"'
+      expect(=> new JobManager client: @client).to.throw 'JobManager constructor is missing "timeoutSeconds"'
 
+  describe 'when instantiated without a client', ->
+    it 'should blow up', ->
+      expect(=> new JobManager timeoutSeconds: 1).to.throw 'JobManager constructor is missing "client"'
 
   describe '->createRequest', ->
     context 'when called with a request', ->

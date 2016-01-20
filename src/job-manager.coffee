@@ -43,6 +43,7 @@ class JobManager
       async.apply @client.hset, "#{responseId}", 'response:data', rawData
       async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{responseQueue}:#{responseId}", "#{responseId}"
+      async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
     ], callback
 
   do: (requestQueue, responseQueue, options, callback) =>

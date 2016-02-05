@@ -25,7 +25,9 @@ class JobManager
       async.apply @client.hset, "#{responseId}", 'request:data', rawData
       async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{requestQueue}:queue", "#{responseId}"
-    ], callback
+    ], (error) =>
+      delete error.code if error?
+      callback error
 
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
@@ -44,7 +46,9 @@ class JobManager
       async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{responseQueue}:#{responseId}", "#{responseId}"
       async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
-    ], callback
+    ], (error) =>
+      delete error.code if error?
+      callback error
 
   do: (requestQueue, responseQueue, options, callback) =>
     options = _.clone options
@@ -68,6 +72,7 @@ class JobManager
         metadata: async.apply @client.hget, key, 'request:metadata'
         data: async.apply @client.hget, key, 'request:data'
       , (error, result) =>
+        delete error.code if error?
         return callback error if error?
         return callback null, null unless result.metadata?
 
@@ -78,6 +83,7 @@ class JobManager
   getResponse: (responseQueue, responseId, callback) =>
     debug '@client.brpop', "#{responseQueue}:#{responseId}"
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
+      delete error.code if error?
       return callback error if error?
       return callback new Error('Response timeout exceeded'), null unless result?
 
@@ -87,6 +93,7 @@ class JobManager
         metadata: async.apply @client.hget, key, 'response:metadata'
         data: async.apply @client.hget, key, 'response:data'
       , (error, result) =>
+        delete error.code if error?
         return callback error if error?
         return callback new Error('Response timeout exceeded'), null unless result.metadata?
 

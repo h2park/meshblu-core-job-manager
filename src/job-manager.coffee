@@ -9,7 +9,7 @@ class JobManager
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
     throw new Error 'JobManager constructor is missing "client"' unless @client?
 
-  createRequest: (requestQueue, options, callback) =>
+  createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
     data ?= null
@@ -23,11 +23,22 @@ class JobManager
     async.series [
       async.apply @client.hset, "#{responseId}", 'request:metadata', metadataStr
       async.apply @client.hset, "#{responseId}", 'request:data', rawData
-      async.apply @client.expire, "#{responseId}", @timeoutSeconds
       async.apply @client.lpush, "#{requestQueue}:queue", "#{responseId}"
     ], (error) =>
       delete error.code if error?
       callback error
+
+  createRequest: (requestQueue, options, callback) =>
+    @createForeverRequest requestQueue, options, (error) =>
+      return callback error if error?
+      {responseId} = options.metadata
+      debug "@client.expire", "#{responseId}", @timeoutSeconds
+
+      async.series [
+        async.apply @client.expire, "#{responseId}", @timeoutSeconds
+      ], (error) =>
+        delete error.code if error?
+        callback error
 
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options

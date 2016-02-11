@@ -81,6 +81,42 @@ describe 'JobManager', ->
           expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
           done()
 
+  describe '->createForeverRequest', ->
+    context 'when called with a request', ->
+      beforeEach (done) ->
+        options =
+          metadata:
+            duel: "i'm just in it for the glove slapping"
+            responseId: 'some-response-id'
+
+        @sut.createForeverRequest 'request', options, done
+
+      describe 'after the timeout has elapsed', (done) ->
+        beforeEach (done) ->
+          _.delay done, 1100
+
+        it 'should not have any data', (done) ->
+          @client.hlen 'some-response-id', (error, responseKeysLength) =>
+            return done error if error?
+            expect(responseKeysLength).to.equal 2
+            done()
+
+    context 'when called with data', ->
+      beforeEach (done) ->
+        options =
+          metadata:
+            responseId: 'some-response-id'
+          data:
+            'tunnel-collapse': 'just a miner problem'
+
+        @sut.createRequest 'request', options, done
+
+      it 'should stringify the data', (done) ->
+        @client.hget 'some-response-id', 'request:data', (error, dataStr) =>
+          data = JSON.parse dataStr
+          expect(data).to.deep.equal 'tunnel-collapse': 'just a miner problem'
+          done()
+
   describe '->createResponse', ->
     context 'when called with a response', ->
       beforeEach (done) ->

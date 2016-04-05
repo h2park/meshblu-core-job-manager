@@ -14,6 +14,8 @@ class JobManager
     {responseId} = metadata
     data ?= null
 
+    return callback new Error('metadata.responseId is required') unless responseId?
+
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 

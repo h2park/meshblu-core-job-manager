@@ -65,6 +65,17 @@ describe 'JobManager', ->
             expect(responseKeysLength).to.equal 0
             done()
 
+    context 'when called without a responseId', ->
+      beforeEach (done) ->
+        @options =
+          metadata:
+            duel: "i'm just in it for the glove slapping"
+
+        @sut.createRequest 'request', @options, done
+
+      it 'should assign a responseId', ->
+        expect(@options.metadata.responseId).to.exist
+
     context 'when called with data', ->
       beforeEach (done) ->
         options =

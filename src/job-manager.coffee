@@ -11,10 +11,9 @@ class JobManager
 
   createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData} = options
+    metadata.responseId ?= uuid.v4()
     {responseId} = metadata
     data ?= null
-
-    return callback new Error('metadata.responseId is required') unless responseId?
 
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
@@ -65,10 +64,9 @@ class JobManager
 
   do: (requestQueue, responseQueue, options, callback) =>
     options = _.clone options
-    options.metadata.responseId ?= uuid.v4()
-    {responseId} = options.metadata
 
     @createRequest requestQueue, options, =>
+      {responseId} = options.metadata
       @getResponse responseQueue, responseId, callback
 
   getRequest: (requestQueues, callback) =>

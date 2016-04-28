@@ -35,10 +35,7 @@ class JobManager
       return callback error if error?
       {responseId} = options.metadata
       debug "@client.expire", responseId, @timeoutSeconds
-
-      async.series [
-        async.apply @client.expire, responseId, @timeoutSeconds
-      ], (error) =>
+      @client.expire responseId, @timeoutSeconds, (error) =>
         delete error.code if error?
         callback error
 
@@ -106,6 +103,7 @@ class JobManager
       async.parallel
         metadata: async.apply @client.hget, key, 'response:metadata'
         data: async.apply @client.hget, key, 'response:data'
+        del: async.apply @client.del, key # clean up
       , (error, result) =>
         delete error.code if error?
         return callback error if error?

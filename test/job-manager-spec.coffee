@@ -333,6 +333,12 @@ describe 'JobManager', ->
 
         expect(@response.rawData).to.deep.equal 'abcd123'
 
+      it 'should clean up', (done) ->
+        @client.exists 'hairball', (error, exists) =>
+          return done error if error?
+          expect(exists).to.equal 0
+          done()
+
     context 'when called with a timed out response', ->
       beforeEach (done) ->
         options =

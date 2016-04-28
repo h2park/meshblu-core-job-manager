@@ -18,13 +18,14 @@ class JobManager
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 
-    debug "@client.hset", "#{responseId}", 'request:metadata', metadataStr
+    debug "@client.hset", responseId, 'request:metadata', metadataStr
     debug '@client.lpush', "#{requestQueue}:queue"
 
     async.series [
-      async.apply @client.hset, "#{responseId}", 'request:metadata', metadataStr
-      async.apply @client.hset, "#{responseId}", 'request:data', rawData
-      async.apply @client.lpush, "#{requestQueue}:queue", "#{responseId}"
+      async.apply @client.hset, responseId, 'request:metadata', metadataStr
+      async.apply @client.hset, responseId, 'request:data', rawData
+      async.apply @client.hset, responseId, 'request:createdAt', Date.now()
+      async.apply @client.lpush, "#{requestQueue}:queue", responseId
     ], (error) =>
       delete error.code if error?
       callback error
@@ -33,10 +34,10 @@ class JobManager
     @createForeverRequest requestQueue, options, (error) =>
       return callback error if error?
       {responseId} = options.metadata
-      debug "@client.expire", "#{responseId}", @timeoutSeconds
+      debug "@client.expire", responseId, @timeoutSeconds
 
       async.series [
-        async.apply @client.expire, "#{responseId}", @timeoutSeconds
+        async.apply @client.expire, responseId, @timeoutSeconds
       ], (error) =>
         delete error.code if error?
         callback error
@@ -49,14 +50,14 @@ class JobManager
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 
-    debug "@client.hset", "#{responseId}", 'response:metadata', metadataStr
-    debug "@client.expire", "#{responseId}", @timeoutSeconds
-    debug "@client.lpush", "#{responseQueue}:#{responseId}", "#{responseId}"
+    debug "@client.hset", responseId, 'response:metadata', metadataStr
+    debug "@client.expire", responseId, @timeoutSeconds
+    debug "@client.lpush", "#{responseQueue}:#{responseId}", responseId
     async.series [
-      async.apply @client.hset, "#{responseId}", 'response:metadata', metadataStr
-      async.apply @client.hset, "#{responseId}", 'response:data', rawData
-      async.apply @client.expire, "#{responseId}", @timeoutSeconds
-      async.apply @client.lpush, "#{responseQueue}:#{responseId}", "#{responseId}"
+      async.apply @client.hset, responseId, 'response:metadata', metadataStr
+      async.apply @client.hset, responseId, 'response:data', rawData
+      async.apply @client.expire, responseId, @timeoutSeconds
+      async.apply @client.lpush, "#{responseQueue}:#{responseId}", responseId
       async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
     ], (error) =>
       delete error.code if error?
@@ -80,14 +81,16 @@ class JobManager
       [channel,key] = result
 
       async.parallel
-        metadata: async.apply @client.hget, key, 'request:metadata'
-        data: async.apply @client.hget, key, 'request:data'
+        metadata:  async.apply @client.hget, key, 'request:metadata'
+        data:      async.apply @client.hget, key, 'request:data'
+        createdAt: async.apply @client.hget, key, 'request:createdAt'
       , (error, result) =>
         delete error.code if error?
         return callback error if error?
         return callback null, null unless result.metadata?
 
         callback null,
+          createdAt: result.createdAt
           metadata: JSON.parse result.metadata
           rawData: result.data
 

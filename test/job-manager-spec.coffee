@@ -55,6 +55,11 @@ describe 'JobManager', ->
           expect(data).to.be.null
           done()
 
+      it 'should put the createdAt in its place', (done) ->
+        @client.hget 'some-response-id', 'request:createdAt', (error, timestamp) =>
+          expect(timestamp).to.exist
+          done()
+
       describe 'after the timeout has elapsed', (done) ->
         beforeEach (done) ->
           _.delay done, 1100
@@ -109,7 +114,7 @@ describe 'JobManager', ->
         it 'should not have any data', (done) ->
           @client.hlen 'some-response-id', (error, responseKeysLength) =>
             return done error if error?
-            expect(responseKeysLength).to.equal 2
+            expect(responseKeysLength).to.equal 3
             done()
 
     context 'when called with data', ->
@@ -259,6 +264,8 @@ describe 'JobManager', ->
           responseId: 'some-response-id'
 
         expect(@request.rawData).to.deep.equal 'abcd123'
+
+        expect(@request.createdAt).to.exist
 
     context 'when called with a two queues', ->
       beforeEach (done) ->

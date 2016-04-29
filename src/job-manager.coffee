@@ -10,7 +10,7 @@ class JobManager
     throw new Error 'JobManager constructor is missing "client"' unless @client?
 
   createForeverRequest: (requestQueue, options, callback) =>
-    {metadata,data,rawData} = options
+    {metadata,data,rawData,ignoreResponse} = options
     metadata.responseId ?= uuid.v4()
     {responseId} = metadata
     data ?= null
@@ -18,13 +18,18 @@ class JobManager
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 
-    debug "@client.hset", responseId, 'request:metadata', metadataStr
-    debug '@client.lpush', "#{requestQueue}:queue"
+    values = [
+      'request:metadata', metadataStr
+      'request:data', rawData
+      'request:createdAt', Date.now()
+    ]
+
+    if ignoreResponse
+      values.push 'request:ignoreResponse'
+      values.push 1
 
     async.series [
-      async.apply @client.hset, responseId, 'request:metadata', metadataStr
-      async.apply @client.hset, responseId, 'request:data', rawData
-      async.apply @client.hset, responseId, 'request:createdAt', Date.now()
+      async.apply @client.hmset, responseId, values
       async.apply @client.lpush, "#{requestQueue}:queue", responseId
     ], (error) =>
       delete error.code if error?
@@ -34,7 +39,6 @@ class JobManager
     @createForeverRequest requestQueue, options, (error) =>
       return callback error if error?
       {responseId} = options.metadata
-      debug "@client.expire", responseId, @timeoutSeconds
       @client.expire responseId, @timeoutSeconds, (error) =>
         delete error.code if error?
         callback error
@@ -47,12 +51,13 @@ class JobManager
     metadataStr = JSON.stringify metadata
     rawData ?= JSON.stringify data
 
-    debug "@client.hset", responseId, 'response:metadata', metadataStr
-    debug "@client.expire", responseId, @timeoutSeconds
-    debug "@client.lpush", "#{responseQueue}:#{responseId}", responseId
+    values = [
+      'response:metadata', metadataStr
+      'response:data', rawData
+    ]
+
     async.series [
-      async.apply @client.hset, responseId, 'response:metadata', metadataStr
-      async.apply @client.hset, responseId, 'response:data', rawData
+      async.apply @client.hmset, responseId, values
       async.apply @client.expire, responseId, @timeoutSeconds
       async.apply @client.lpush, "#{responseQueue}:#{responseId}", responseId
       async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
@@ -70,20 +75,23 @@ class JobManager
   getRequest: (requestQueues, callback) =>
     return callback new Error 'First argument must be an array' unless _.isArray requestQueues
     queues = _.map requestQueues, (queue) => "#{queue}:queue"
-    debug '@client.brpop', queues...
     @client.brpop queues..., @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback null, null unless result?
 
       [channel,key] = result
 
-      async.parallel
-        metadata:  async.apply @client.hget, key, 'request:metadata'
-        data:      async.apply @client.hget, key, 'request:data'
-        createdAt: async.apply @client.hget, key, 'request:createdAt'
-      , (error, result) =>
+      @client.hgetall key, (error, result) =>
         delete error.code if error?
         return callback error if error?
+
+        _.each result, (value, key) =>
+          newKey = _.last _.split key, /:/
+          result[newKey] = value
+          delete result[key]
+
+        if result.ignoreResponse?
+          @client.del key, ->
         return callback null, null unless result.metadata?
 
         callback null,
@@ -92,7 +100,6 @@ class JobManager
           rawData: result.data
 
   getResponse: (responseQueue, responseId, callback) =>
-    debug '@client.brpop', "#{responseQueue}:#{responseId}"
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
       delete error.code if error?
       return callback error if error?
@@ -103,7 +110,7 @@ class JobManager
       async.parallel
         metadata: async.apply @client.hget, key, 'response:metadata'
         data: async.apply @client.hget, key, 'response:data'
-        del: async.apply @client.del, key # clean up
+        del: async.apply @client.del, key, "#{responseQueue}:#{responseId}" # clean up
       , (error, result) =>
         delete error.code if error?
         return callback error if error?

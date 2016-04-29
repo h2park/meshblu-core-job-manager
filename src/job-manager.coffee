@@ -84,21 +84,15 @@ class JobManager
       @client.hgetall key, (error, result) =>
         delete error.code if error?
         return callback error if error?
-
-        _.each result, (value, key) =>
-          newKey = _.last _.split key, /:/
-          result[newKey] = value
-          delete result[key]
-
         return callback() unless result?
-        if result.ignoreResponse?
-          @client.del key, ->
-        return callback() unless result.metadata?
+        return callback() unless result['request:metadata']?
 
-        callback null,
-          createdAt: result.createdAt
-          metadata: JSON.parse result.metadata
-          rawData: result.data
+        request =
+          createdAt: result['request:createdAt']
+          metadata:  JSON.parse result['request:metadata']
+          rawData:   result['request:data']
+
+        callback null, request
 
   getResponse: (responseQueue, responseId, callback) =>
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
@@ -108,17 +102,22 @@ class JobManager
 
       [channel,key] = result
 
-      async.parallel
-        metadata: async.apply @client.hget, key, 'response:metadata'
-        data: async.apply @client.hget, key, 'response:data'
-        del: async.apply @client.del, key, "#{responseQueue}:#{responseId}" # clean up
-      , (error, result) =>
+      @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
         delete error.code if error?
         return callback error if error?
-        return callback new Error('Response timeout exceeded'), null unless result.metadata?
 
-        callback null,
-          metadata: JSON.parse result.metadata
-          rawData: result.data
+        @client.del key, "#{responseQueue}:#{responseId}", (error) =>
+          delete error.code if error?
+          return callback error if error?
+
+          [metadata, rawData] = data
+
+          return callback new Error('Response timeout exceeded'), null unless metadata?
+
+          response =
+            metadata: JSON.parse metadata
+            rawData: rawData
+
+          callback null, response
 
 module.exports = JobManager

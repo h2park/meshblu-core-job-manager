@@ -77,7 +77,7 @@ class JobManager
     queues = _.map requestQueues, (queue) => "#{queue}:queue"
     @client.brpop queues..., @timeoutSeconds, (error, result) =>
       return callback error if error?
-      return callback null, null unless result?
+      return callback() unless result?
 
       [channel,key] = result
 
@@ -90,9 +90,10 @@ class JobManager
           result[newKey] = value
           delete result[key]
 
+        return callback() unless result?
         if result.ignoreResponse?
           @client.del key, ->
-        return callback null, null unless result.metadata?
+        return callback() unless result.metadata?
 
         callback null,
           createdAt: result.createdAt

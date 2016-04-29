@@ -56,14 +56,24 @@ class JobManager
       'response:data', rawData
     ]
 
-    async.series [
-      async.apply @client.hmset, responseId, values
-      async.apply @client.expire, responseId, @timeoutSeconds
-      async.apply @client.lpush, "#{responseQueue}:#{responseId}", responseId
-      async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
-    ], (error) =>
+    @client.hexists responseId, 'request:ignoreResponse', (error, ignoreResponse) =>
       delete error.code if error?
-      callback error
+      return callback error if error?
+
+      if ignoreResponse == 1
+        @client.del responseId, (error) =>
+          delete error.code if error?
+          callback error
+        return
+
+      async.series [
+        async.apply @client.hmset, responseId, values
+        async.apply @client.expire, responseId, @timeoutSeconds
+        async.apply @client.lpush, "#{responseQueue}:#{responseId}", responseId
+        async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
+      ], (error) =>
+        delete error.code if error?
+        callback error
 
   do: (requestQueue, responseQueue, options, callback) =>
     options = _.clone options

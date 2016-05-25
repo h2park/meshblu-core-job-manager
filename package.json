@@ -1,6 +1,6 @@
 {
   "name": "meshblu-core-job-manager",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "Meshblu Core Job Manager",
   "main": "index.js",
   "directories": {
@@ -15,6 +15,7 @@
   "devDependencies": {
     "@octoblu/redis-ns": "^1.1.2",
     "chai": "^3.4.0",
+    "chai-subset": "^1.2.2",
     "coffee-coverage": "^0.6.3",
     "coffee-script": "^1.10.0",
     "fakeredis": "^0.3.4",

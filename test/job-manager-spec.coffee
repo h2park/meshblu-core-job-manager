@@ -44,7 +44,7 @@ describe 'JobManager', ->
       it 'should put the metadata in its place', (done) ->
         @client.hget 'some-response-id', 'request:metadata', (error, metadataStr) =>
           metadata = JSON.parse metadataStr
-          expect(metadata).to.deep.equal
+          expect(metadata).to.containSubset
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response-id'
           done()
@@ -154,7 +154,7 @@ describe 'JobManager', ->
       it 'should put the metadata in its place', (done) ->
         @client.hget 'some-response-id', 'response:metadata', (error, metadataStr) =>
           metadata = JSON.parse metadataStr
-          expect(metadata).to.deep.equal
+          expect(metadata).to.containSubset
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response-id'
           done()
@@ -225,7 +225,7 @@ describe 'JobManager', ->
           wait = (callback) => _.delay callback, 10
 
           async.until onResponseCalled, wait, =>
-            expect(@onResponse).to.have.been.calledWith null,
+            expect(@onResponse.args[0][1]).to.containSubset
               metadata:
                 gross: true
                 responseId: @responseId
@@ -259,7 +259,7 @@ describe 'JobManager', ->
       it 'should return a request', ->
         expect(@request).to.exist
 
-        expect(@request.metadata).to.deep.equal
+        expect(@request.metadata).to.containSubset
           gross: true
           responseId: 'some-response-id'
 
@@ -284,7 +284,7 @@ describe 'JobManager', ->
       it 'should return a request', ->
         expect(@request).to.exist
 
-        expect(@request.metadata).to.deep.equal
+        expect(@request.metadata).to.containSubset
           gross: true
           responseId: 'hairball'
 
@@ -327,7 +327,7 @@ describe 'JobManager', ->
       it 'should return a response', ->
         expect(@response).to.exist
 
-        expect(@response.metadata).to.deep.equal
+        expect(@response.metadata).to.containSubset
           gross: true
           responseId: 'hairball'
 

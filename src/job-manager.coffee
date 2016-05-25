@@ -12,6 +12,7 @@ class JobManager
   createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData,ignoreResponse} = options
     metadata.responseId ?= uuid.v4()
+    _.set metadata, 'metrics.enqueueRequestAt', Date.now()
     {responseId} = metadata
     data ?= null
 
@@ -46,6 +47,7 @@ class JobManager
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
+    _.set metadata, 'metrics.enqueueResponseAt', Date.now()
     data ?= null
 
     metadataStr = JSON.stringify metadata
@@ -97,9 +99,12 @@ class JobManager
         return callback() unless result?
         return callback() unless result['request:metadata']?
 
+        metadata = JSON.parse result['request:metadata']
+        _.set metadata, 'metrics.dequeueRequestAt', Date.now()
+
         request =
           createdAt: result['request:createdAt']
-          metadata:  JSON.parse result['request:metadata']
+          metadata:  metadata
           rawData:   result['request:data']
 
         callback null, request
@@ -121,6 +126,7 @@ class JobManager
           return callback error if error?
 
           [metadata, rawData] = data
+          _.set metadata, 'metrics.dequeueResponseAt', Date.now()
 
           return callback new Error('Response timeout exceeded'), null unless metadata?
 

@@ -126,12 +126,13 @@ class JobManager
           return callback error if error?
 
           [metadata, rawData] = data
-          _.set metadata, 'metrics.dequeueResponseAt', Date.now()
-
           return callback new Error('Response timeout exceeded'), null unless metadata?
 
+          metadata = JSON.parse metadata
+          _.set metadata, 'metrics.dequeueResponseAt', Date.now()
+
           response =
-            metadata: JSON.parse metadata
+            metadata: metadata
             rawData: rawData
 
           callback null, response

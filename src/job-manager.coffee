@@ -90,6 +90,7 @@ class JobManager
     @client.brpop queues..., @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback() unless result?
+      dequeueRequestAt = Date.now()
 
       [channel,key] = result
 
@@ -100,7 +101,7 @@ class JobManager
         return callback() unless result['request:metadata']?
 
         metadata = JSON.parse result['request:metadata']
-        _.set metadata, 'metrics.dequeueRequestAt', Date.now()
+        _.set metadata, 'metrics.dequeueRequestAt', dequeueRequestAt
 
         request =
           createdAt: result['request:createdAt']
@@ -114,6 +115,7 @@ class JobManager
       delete error.code if error?
       return callback error if error?
       return callback new Error('Response timeout exceeded'), null unless result?
+      dequeueResponseAt = Date.now()
 
       [channel,key] = result
 
@@ -129,7 +131,7 @@ class JobManager
           return callback new Error('Response timeout exceeded'), null unless metadata?
 
           metadata = JSON.parse metadata
-          _.set metadata, 'metrics.dequeueResponseAt', Date.now()
+          _.set metadata, 'metrics.dequeueResponseAt', dequeueResponseAt
 
           response =
             metadata: metadata

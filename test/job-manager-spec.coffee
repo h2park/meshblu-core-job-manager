@@ -78,8 +78,11 @@ describe 'JobManager', ->
 
         @sut.createRequest 'request', @options, done
 
-      it 'should assign a responseId', ->
-        expect(@options.metadata.responseId).to.exist
+      it 'should not fail', (done) ->
+        @client.llen 'request:queue', (error, length) =>
+          return done error if error?
+          expect(length).to.equal 1
+          done()
 
     context 'when called with data', ->
       beforeEach (done) ->

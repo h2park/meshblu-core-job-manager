@@ -12,17 +12,22 @@ class JobManager
   addMetric: (metadata, metricName, callback) =>
     metadata.metrics ?= {}
     jitter = Date.now()
-    @client.time (error, [seconds,microseconds]) =>
+    metadata.metrics.jitter ?= 0
+    metadata.metrics.count ?= 0
+    @client.time (error, serverTime) =>
       return callback error if error?
-      jitter -= Date.now()
+      return callback() unless serverTime?
+      [seconds,microseconds] = serverTime
+      jitter = Date.now() - jitter
       currentTime = seconds * 1000 + (microseconds / 1000)
       metadata.metrics[metricName] = currentTime
-      metadata.metrics.jitter ?= 0
       metadata.metrics.jitter += jitter
+      metadata.metrics.count += 1
       callback()
 
   createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData,ignoreResponse} = options
+    metadata = _.clone metadata
     metadata.responseId ?= uuid.v4()
     metadata.metrics = {}
     @addMetric metadata, 'enqueueRequestAt', (error) =>
@@ -105,7 +110,6 @@ class JobManager
     @client.brpop queues..., @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback() unless result?
-      dequeueRequestAt = Date.now()
 
       [channel,key] = result
 
@@ -131,7 +135,6 @@ class JobManager
       delete error.code if error?
       return callback error if error?
       return callback new Error('Response timeout exceeded'), null unless result?
-      dequeueResponseAt = Date.now()
 
       [channel,key] = result
 

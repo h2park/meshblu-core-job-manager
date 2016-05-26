@@ -9,39 +9,46 @@ class JobManager
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
     throw new Error 'JobManager constructor is missing "client"' unless @client?
 
-  addMetric: (metadata, metricName, overwrite) =>
+  addMetric: (metadata, metricName, callback) =>
     metadata.metrics ?= {}
-    if overwrite
-      metadata.metrics[metricName] = Date.now()
-    else
-      metadata.metrics[metricName] ?= Date.now()
+    jitter = Date.now()
+    @client.time (error, [seconds,microseconds]) =>
+      return callback error if error?
+      jitter -= Date.now()
+      currentTime = seconds * 1000 + (microseconds / 1000)
+      metadata.metrics[metricName] = currentTime
+      metadata.metrics.jitter ?= 0
+      metadata.metrics.jitter += jitter
+      callback()
 
   createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData,ignoreResponse} = options
     metadata.responseId ?= uuid.v4()
-    @addMetric metadata, 'enqueueRequestAt'
-    {responseId} = metadata
-    data ?= null
+    metadata.metrics = {}
+    @addMetric metadata, 'enqueueRequestAt', (error) =>
+      return callback error if error?
+      {responseId} = metadata
+      data ?= null
 
-    metadataStr = JSON.stringify metadata
-    rawData ?= JSON.stringify data
+      metadataStr = JSON.stringify metadata
+      rawData ?= JSON.stringify data
 
-    values = [
-      'request:metadata', metadataStr
-      'request:data', rawData
-      'request:createdAt', Date.now()
-    ]
+      values = [
+        'request:metadata', metadataStr
+        'request:data', rawData
+        'request:createdAt', Date.now()
+      ]
 
-    if ignoreResponse
-      values.push 'request:ignoreResponse'
-      values.push 1
+      if ignoreResponse
+        values.push 'request:ignoreResponse'
+        values.push 1
 
-    async.series [
-      async.apply @client.hmset, responseId, values
-      async.apply @client.lpush, "#{requestQueue}:queue", responseId
-    ], (error) =>
-      delete error.code if error?
-      callback error
+      async.series [
+        async.apply @client.hmset, responseId, values
+        async.apply @client.lpush, "#{requestQueue}:queue", responseId
+      ], (error) =>
+        delete error.code if error?
+        callback error
 
   createRequest: (requestQueue, options, callback) =>
     @createForeverRequest requestQueue, options, (error) =>
@@ -54,35 +61,36 @@ class JobManager
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
-    @addMetric metadata, 'enqueueResponseAt', true
-    data ?= null
-
-    metadataStr = JSON.stringify metadata
-    rawData ?= JSON.stringify data
-
-    values = [
-      'response:metadata', metadataStr
-      'response:data', rawData
-    ]
-
-    @client.hexists responseId, 'request:ignoreResponse', (error, ignoreResponse) =>
-      delete error.code if error?
+    @addMetric metadata, 'enqueueResponseAt', (error) =>
       return callback error if error?
+      data ?= null
 
-      if ignoreResponse == 1
-        @client.del responseId, (error) =>
+      metadataStr = JSON.stringify metadata
+      rawData ?= JSON.stringify data
+
+      values = [
+        'response:metadata', metadataStr
+        'response:data', rawData
+      ]
+
+      @client.hexists responseId, 'request:ignoreResponse', (error, ignoreResponse) =>
+        delete error.code if error?
+        return callback error if error?
+
+        if ignoreResponse == 1
+          @client.del responseId, (error) =>
+            delete error.code if error?
+            callback error
+          return
+
+        async.series [
+          async.apply @client.hmset, responseId, values
+          async.apply @client.expire, responseId, @timeoutSeconds
+          async.apply @client.lpush, "#{responseQueue}:#{responseId}", responseId
+          async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
+        ], (error) =>
           delete error.code if error?
           callback error
-        return
-
-      async.series [
-        async.apply @client.hmset, responseId, values
-        async.apply @client.expire, responseId, @timeoutSeconds
-        async.apply @client.lpush, "#{responseQueue}:#{responseId}", responseId
-        async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
-      ], (error) =>
-        delete error.code if error?
-        callback error
 
   do: (requestQueue, responseQueue, options, callback) =>
     options = _.clone options
@@ -108,14 +116,15 @@ class JobManager
         return callback() unless result['request:metadata']?
 
         metadata = JSON.parse result['request:metadata']
-        @addMetric metadata, 'dequeueRequestAt'
+        @addMetric metadata, 'dequeueRequestAt', (error) =>
+          return callback error if error?
 
-        request =
-          createdAt: result['request:createdAt']
-          metadata:  metadata
-          rawData:   result['request:data']
+          request =
+            createdAt: result['request:createdAt']
+            metadata:  metadata
+            rawData:   result['request:data']
 
-        callback null, request
+          callback null, request
 
   getResponse: (responseQueue, responseId, callback) =>
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
@@ -138,12 +147,13 @@ class JobManager
           return callback new Error('Response timeout exceeded'), null unless metadata?
 
           metadata = JSON.parse metadata
-          @addMetric metadata, 'dequeueResponseAt', true
+          @addMetric metadata, 'dequeueResponseAt', (error) =>
+            return callback error if error?
 
-          response =
-            metadata: metadata
-            rawData: rawData
+            response =
+              metadata: metadata
+              rawData: rawData
 
-          callback null, response
+            callback null, response
 
 module.exports = JobManager

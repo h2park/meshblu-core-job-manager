@@ -9,10 +9,17 @@ class JobManager
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
     throw new Error 'JobManager constructor is missing "client"' unless @client?
 
+  addMetric: (metadata, metricName, overwrite) =>
+    metadata.metrics ?= {}
+    if overwrite
+      metadata.metrics[metricName] = Date.now()
+    else
+      metadata.metrics[metricName] ?= Date.now()
+
   createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData,ignoreResponse} = options
     metadata.responseId ?= uuid.v4()
-    _.set metadata, 'metrics.enqueueRequestAt', Date.now()
+    @addMetric metadata, 'enqueueRequestAt'
     {responseId} = metadata
     data ?= null
 
@@ -47,7 +54,7 @@ class JobManager
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
-    _.set metadata, 'metrics.enqueueResponseAt', Date.now()
+    @addMetric metadata, 'enqueueResponseAt', true
     data ?= null
 
     metadataStr = JSON.stringify metadata
@@ -101,7 +108,7 @@ class JobManager
         return callback() unless result['request:metadata']?
 
         metadata = JSON.parse result['request:metadata']
-        _.set metadata, 'metrics.dequeueRequestAt', dequeueRequestAt
+        @addMetric metadata, 'dequeueRequestAt'
 
         request =
           createdAt: result['request:createdAt']
@@ -131,7 +138,7 @@ class JobManager
           return callback new Error('Response timeout exceeded'), null unless metadata?
 
           metadata = JSON.parse metadata
-          _.set metadata, 'metrics.dequeueResponseAt', dequeueResponseAt
+          @addMetric metadata, 'dequeueResponseAt', true
 
           response =
             metadata: metadata

@@ -42,15 +42,14 @@ class JobManager
         async.apply @client.lpush, "#{requestQueue}:queue", responseId
       ], (error) =>
         delete error.code if error?
-        callback error
+        callback error, metadata.responseId
 
   createRequest: (requestQueue, options, callback) =>
-    @createForeverRequest requestQueue, options, (error) =>
+    @createForeverRequest requestQueue, options, (error, responseId) =>
       return callback error if error?
-      {responseId} = options.metadata
       @client.expire responseId, @timeoutSeconds, (error) =>
         delete error.code if error?
-        callback error
+        callback error, responseId
 
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options

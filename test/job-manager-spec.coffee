@@ -76,13 +76,11 @@ describe 'JobManager', ->
           metadata:
             duel: "i'm just in it for the glove slapping"
 
-        @sut.createRequest 'request', @options, done
+        @sut.createRequest 'request', @options, (error, @responseId) =>
+          done error
 
-      it 'should not fail', (done) ->
-        @client.llen 'request:queue', (error, length) =>
-          return done error if error?
-          expect(length).to.equal 1
-          done()
+      it 'should assign a responseId', ->
+        expect(@responseId).to.exist
 
     context 'when called with data', ->
       beforeEach (done) ->

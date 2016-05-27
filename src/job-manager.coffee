@@ -42,7 +42,7 @@ class JobManager
         async.apply @client.lpush, "#{requestQueue}:queue", responseId
       ], (error) =>
         delete error.code if error?
-        callback error, metadata.responseId
+        callback error, responseId
 
   createRequest: (requestQueue, options, callback) =>
     @createForeverRequest requestQueue, options, (error, responseId) =>

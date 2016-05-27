@@ -10,20 +10,9 @@ class JobManager
     throw new Error 'JobManager constructor is missing "client"' unless @client?
 
   addMetric: (metadata, metricName, callback) =>
-    jitter = Date.now()
     metadata.metrics ?= {}
-    metadata.metrics.jitter ?= 0
-    metadata.metrics.count ?= 0
-    @client.time (error, serverTime) =>
-      return callback error if error?
-      return callback() unless serverTime?
-      [seconds,microseconds] = serverTime
-      jitter = Date.now() - jitter
-      currentTime = seconds * 1000 + (microseconds / 1000)
-      metadata.metrics[metricName] = currentTime
-      metadata.metrics.jitter += jitter
-      metadata.metrics.count += 1
-      callback()
+    metadata.metrics[metricName] = Date.now()
+    callback()
 
   createForeverRequest: (requestQueue, options, callback) =>
     {metadata,data,rawData,ignoreResponse} = options

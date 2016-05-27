@@ -88,8 +88,8 @@ class JobManager
   do: (requestQueue, responseQueue, options, callback) =>
     options = _.clone options
 
-    @createRequest requestQueue, options, =>
-      {responseId} = options.metadata
+    @createRequest requestQueue, options, (error, responseId) =>
+      return callback error if error?
       @getResponse responseQueue, responseId, callback
 
   getRequest: (requestQueues, callback) =>

@@ -21,14 +21,8 @@ class JobManager
       setInterval @updateOverrideUuids, @overrideRefreshSeconds
 
   updateOverrideUuids: (callback=->) =>
-    @client.get @overrideKey, (error, result) =>
-      return callback error if error?
-      try
-        uuids = JSON.parse result
-      catch error
-        uuids = []
-      @jobLogSampleRateOverrideUuids = uuids
-      callback()
+    @client.smembers @overrideKey, (error, @jobLogSampleRateOverrideUuids) =>
+      callback error
 
   addMetric: (metadata, metricName, callback) =>
     return callback() unless _.isArray metadata.jobLogs

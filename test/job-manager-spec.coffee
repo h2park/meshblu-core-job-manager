@@ -40,7 +40,7 @@ describe 'JobManager', ->
         overrideKey: 'override-my-uuids'
 
     beforeEach (done) ->
-      @client.set 'override-my-uuids', JSON.stringify(['some-uuid']), done
+      @client.sadd 'override-my-uuids', 'some-uuid', done
 
     beforeEach (done) ->
       @sut.updateOverrideUuids done

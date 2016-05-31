@@ -14,14 +14,52 @@ describe 'JobManager', ->
     @sut = new JobManager
       client: new RedisNS 'ns', redis.createClient(@redisId)
       timeoutSeconds: 1
+      jobLogSampleRate: 1
 
   describe 'when instantiated without a timeout', ->
     it 'should blow up', ->
-      expect(=> new JobManager client: @client).to.throw 'JobManager constructor is missing "timeoutSeconds"'
+      expect(=> new JobManager client: @client, jobLogSampleRate: 0).to.throw 'JobManager constructor is missing "timeoutSeconds"'
 
   describe 'when instantiated without a client', ->
     it 'should blow up', ->
-      expect(=> new JobManager timeoutSeconds: 1).to.throw 'JobManager constructor is missing "client"'
+      expect(=> new JobManager timeoutSeconds: 1, jobLogSampleRate: 0).to.throw 'JobManager constructor is missing "client"'
+
+  describe 'when instantiated without a jobLogSampleRate', ->
+    it 'should blow up', ->
+      expect(=> new JobManager client: @client, timeoutSeconds: 1).to.throw 'JobManager constructor is missing "jobLogSampleRate"'
+
+  describe 'with a jobLogSampleRateOverrideUuid', ->
+    beforeEach ->
+      @sut = new JobManager
+        client: new RedisNS 'ns', redis.createClient(@redisId)
+        timeoutSeconds: 1
+        jobLogSampleRate: 0
+        jobLogPrefix: 'unfiltered'
+        jobLogSampleRateOverrideUuids: ['some-uuid']
+
+    describe '->createRequest', ->
+      context 'when called with a request', ->
+        beforeEach (done) ->
+          options =
+            metadata:
+              auth: uuid: 'some-uuid'
+              duel: "i'm just in it for the glove slapping"
+              responseId: 'some-response-id'
+
+          @sut.createRequest 'request', options, done
+
+        it 'should put the metadata in its place', (done) ->
+          @client.hget 'some-response-id', 'request:metadata', (error, metadataStr) =>
+            metadata = JSON.parse metadataStr
+            expect(metadata).to.containSubset
+              duel: "i'm just in it for the glove slapping"
+              responseId: 'some-response-id'
+              jobLog:
+                enabled: true
+                prefix: 'unfiltered'
+                override: true
+
+            done()
 
   describe '->createRequest', ->
     context 'when called with a request', ->
@@ -47,6 +85,7 @@ describe 'JobManager', ->
           expect(metadata).to.containSubset
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response-id'
+            jobLog: enabled: true
           done()
 
       it 'should put the data in its place', (done) ->
@@ -208,6 +247,7 @@ describe 'JobManager', ->
           jobManager = new JobManager
             client: new RedisNS 'ns', redis.createClient(@redisId)
             timeoutSeconds: 1
+            jobLogSampleRate: 0
 
           jobManager.getRequest ['request'], (error, request) =>
             return done error if error?

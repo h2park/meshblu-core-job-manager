@@ -5,11 +5,14 @@ uuid  = require 'uuid'
 
 class JobManager
   constructor: (options={}) ->
-    {@client,@timeoutSeconds} = options
-    throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
+    {@client,@jobLogPrefix,@jobLogSampleRate,@jobLogSampleRateOverrideUuids,@timeoutSeconds} = options
+    @jobLogPrefix ?= ''
     throw new Error 'JobManager constructor is missing "client"' unless @client?
+    throw new Error 'JobManager constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
+    throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
 
   addMetric: (metadata, metricName, callback) =>
+    return callback() unless metadata.logJob
     metadata.metrics ?= {}
     metadata.metrics[metricName] = Date.now()
     callback()
@@ -18,7 +21,18 @@ class JobManager
     {metadata,data,rawData,ignoreResponse} = options
     metadata = _.clone metadata
     metadata.responseId ?= uuid.v4()
-    metadata.metrics = {}
+
+    if @jobLogSampleRateOverrideUuids?
+      enabled = _.includes @jobLogSampleRateOverrideUuids, metadata.auth?.uuid
+      metadata.jobLog = {enabled, override: true}
+    else
+      enabled = Math.random() < @jobLogSampleRate
+      metadata.jobLog ?= {enabled}
+
+    if metadata.jobLog?.enabled
+      metadata.metrics = {}
+      metadata.jobLog.prefix = @jobLogPrefix unless _.isEmpty @jobLogPrefix
+
     @addMetric metadata, 'enqueueRequestAt', (error) =>
       return callback error if error?
       {responseId} = metadata

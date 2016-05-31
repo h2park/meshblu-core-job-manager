@@ -5,14 +5,33 @@ uuid  = require 'uuid'
 
 class JobManager
   constructor: (options={}) ->
-    {@client,@jobLogPrefix,@jobLogSampleRate,@jobLogSampleRateOverrideUuids,@timeoutSeconds} = options
-    @jobLogPrefix ?= ''
+    {@client,@jobLogSampleRate,@overrideRefreshSeconds,@timeoutSeconds,@overrideKey} = options
+    @overrideRefreshSeconds ?= 60
+
+    # allow null to disable @overrideKey checking
+    if _.isUndefined @overrideKey
+      @overrideKey = 'override-uuids'
+
     throw new Error 'JobManager constructor is missing "client"' unless @client?
     throw new Error 'JobManager constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
 
+    if @overrideKey?
+      @updateOverrideUuids()
+      setInterval @updateOverrideUuids, @overrideRefreshSeconds
+
+  updateOverrideUuids: (callback=->) =>
+    @client.get @overrideKey, (error, result) =>
+      return callback error if error?
+      try
+        uuids = JSON.parse result
+      catch error
+        uuids = []
+      @jobLogSampleRateOverrideUuids = uuids
+      callback()
+
   addMetric: (metadata, metricName, callback) =>
-    return callback() unless metadata.logJob
+    return callback() unless _.isArray metadata.jobLogs
     metadata.metrics ?= {}
     metadata.metrics[metricName] = Date.now()
     callback()
@@ -22,16 +41,21 @@ class JobManager
     metadata = _.clone metadata
     metadata.responseId ?= uuid.v4()
 
+    metadata.jobLogs = []
     if @jobLogSampleRateOverrideUuids?
-      enabled = _.includes @jobLogSampleRateOverrideUuids, metadata.auth?.uuid
-      metadata.jobLog = {enabled, override: true}
+      uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid ]
+      matches = _.intersection @jobLogSampleRateOverrideUuids, uuids
+      unless _.isEmpty matches
+        metadata.jobLogs.push 'override'
     else
-      enabled = Math.random() < @jobLogSampleRate
-      metadata.jobLog ?= {enabled}
+      if Math.random() < @jobLogSampleRate
+        metadata.jobLogs.push 'sampled'
 
-    if metadata.jobLog?.enabled
+    if _.isEmpty metadata.jobLogs
+      delete metadata.jobLogs
+
+    if _.isArray metadata.jobLogs
       metadata.metrics = {}
-      metadata.jobLog.prefix = @jobLogPrefix unless _.isEmpty @jobLogPrefix
 
     @addMetric metadata, 'enqueueRequestAt', (error) =>
       return callback error if error?

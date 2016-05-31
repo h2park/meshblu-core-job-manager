@@ -28,14 +28,25 @@ describe 'JobManager', ->
     it 'should blow up', ->
       expect(=> new JobManager client: @client, timeoutSeconds: 1).to.throw 'JobManager constructor is missing "jobLogSampleRate"'
 
-  describe 'with a jobLogSampleRateOverrideUuid', ->
+  describe 'with override-uuids set', ->
+    beforeEach ->
+      @client = new RedisNS 'ns', redis.createClient(@redisId)
+
     beforeEach ->
       @sut = new JobManager
-        client: new RedisNS 'ns', redis.createClient(@redisId)
+        client: @client
         timeoutSeconds: 1
         jobLogSampleRate: 0
-        jobLogPrefix: 'unfiltered'
-        jobLogSampleRateOverrideUuids: ['some-uuid']
+        overrideKey: 'override-my-uuids'
+
+    beforeEach (done) ->
+      @client.set 'override-my-uuids', JSON.stringify(['some-uuid']), done
+
+    beforeEach (done) ->
+      @sut.updateOverrideUuids done
+
+    afterEach (done) ->
+      @client.del 'override-my-uuids', done
 
     describe '->createRequest', ->
       context 'when called with a request', ->
@@ -54,10 +65,7 @@ describe 'JobManager', ->
             expect(metadata).to.containSubset
               duel: "i'm just in it for the glove slapping"
               responseId: 'some-response-id'
-              jobLog:
-                enabled: true
-                prefix: 'unfiltered'
-                override: true
+              jobLogs: ['override']
 
             done()
 
@@ -85,7 +93,7 @@ describe 'JobManager', ->
           expect(metadata).to.containSubset
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response-id'
-            jobLog: enabled: true
+            jobLogs: ['sampled']
           done()
 
       it 'should put the data in its place', (done) ->

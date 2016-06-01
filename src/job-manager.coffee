@@ -165,7 +165,9 @@ class JobManager
             metadata:  metadata
             rawData:   result['request:data']
 
-          callback null, request
+          @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
+            return callback error if error?
+            callback null, request
 
   getResponse: (responseQueue, responseId, callback) =>
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
@@ -179,7 +181,7 @@ class JobManager
         delete error.code if error?
         return callback error if error?
 
-        @client.del key, "#{responseQueue}:#{responseId}", (error) =>
+        @client.del key, "#{responseQueue}:#{responseId}", responseId, (error) =>
           delete error.code if error?
           return callback error if error?
 

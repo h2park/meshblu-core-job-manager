@@ -36,14 +36,14 @@ class JobManager
     metadata.responseId ?= uuid.v4()
 
     metadata.jobLogs = []
-    if @jobLogSampleRateOverrideUuids?
+    if Math.random() < @jobLogSampleRate
+      metadata.jobLogs.push 'sampled'
+
+    unless _.isEmpty @jobLogSampleRateOverrideUuids
       uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid ]
       matches = _.intersection @jobLogSampleRateOverrideUuids, uuids
       unless _.isEmpty matches
         metadata.jobLogs.push 'override'
-    else
-      if Math.random() < @jobLogSampleRate
-        metadata.jobLogs.push 'sampled'
 
     if _.isEmpty metadata.jobLogs
       delete metadata.jobLogs

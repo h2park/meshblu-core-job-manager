@@ -131,7 +131,8 @@ class JobManager
           async.apply @client.expire, "#{responseQueue}:#{responseId}", @timeoutSeconds
         ], (error) =>
           delete error.code if error?
-          callback error
+          return callback error if error?
+          return callback null, {metadata, rawData}
 
   do: (requestQueue, responseQueue, options, callback) =>
     options = _.clone options

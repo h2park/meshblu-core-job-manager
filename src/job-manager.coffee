@@ -95,8 +95,7 @@ class JobManager
     @client.hmget responseId, fields, (error, result) =>
       delete error.code if error?
       return callback error if error?
-
-      ignoreResponse = result['request:ignoreResponse']
+      [requestMetadata, ignoreResponse] = result
 
       if ignoreResponse == 1
         @client.del responseId, (error) =>
@@ -105,7 +104,7 @@ class JobManager
         return
 
       try
-        requestMetadata = JSON.parse result['request:metadata']
+        requestMetadata = JSON.parse requestMetadata
       catch
         requestMetadata = {}
 

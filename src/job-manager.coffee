@@ -106,7 +106,8 @@ class JobManager
       try
         requestMetadata = JSON.parse requestMetadata
       catch
-        requestMetadata = {}
+
+      requestMetadata ?= {}
 
       metadata.jobLogs = requestMetadata.jobLogs
       metadata.metrics = requestMetadata.metrics

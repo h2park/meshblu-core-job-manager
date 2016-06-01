@@ -18,7 +18,7 @@ class JobManager
 
     if @overrideKey?
       @updateOverrideUuids()
-      setInterval @updateOverrideUuids, @overrideRefreshSeconds
+      setInterval @updateOverrideUuids, @overrideRefreshSeconds * 1000
 
   updateOverrideUuids: (callback=->) =>
     @client.smembers @overrideKey, (error, @jobLogSampleRateOverrideUuids) =>

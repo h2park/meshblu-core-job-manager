@@ -13,5 +13,5 @@ Meshblu Core Job Manager
 Add the uuid to the redis set specified in `overrideKey`. (defaults to `override-uuids`)
 
 ```
-redis-cli SADD override-uuids b3ad254f-0ef1-401b-9c1b-22c429a60208
+redis-cli SADD meshblu:override-uuids b3ad254f-0ef1-401b-9c1b-22c429a60208
 ```

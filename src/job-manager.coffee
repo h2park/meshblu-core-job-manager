@@ -86,27 +86,43 @@ class JobManager
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
-    @addMetric metadata, 'enqueueResponseAt', (error) =>
+
+    fields = [
+      'request:metadata'
+      'request:ignoreResponse'
+    ]
+
+    @client.hmget responseId, fields, (error, result) =>
+      delete error.code if error?
       return callback error if error?
-      data ?= null
 
-      metadataStr = JSON.stringify metadata
-      rawData ?= JSON.stringify data
+      try
+        requestMetadata = JSON.parse result['request:metadata']
+      catch
+        requestMetadata = {}
 
-      values = [
-        'response:metadata', metadataStr
-        'response:data', rawData
-      ]
+      ignoreResponse = result['request:ignoreResponse']
 
-      @client.hexists responseId, 'request:ignoreResponse', (error, ignoreResponse) =>
-        delete error.code if error?
+      if ignoreResponse == 1
+        @client.del responseId, (error) =>
+          delete error.code if error?
+          callback error
+        return
+
+      metadata.jobLogs = requestMetadata.jobLogs
+      metadata.metrics = requestMetadata.metrics
+
+      @addMetric metadata, 'enqueueResponseAt', (error) =>
         return callback error if error?
+        data ?= null
 
-        if ignoreResponse == 1
-          @client.del responseId, (error) =>
-            delete error.code if error?
-            callback error
-          return
+        metadataStr = JSON.stringify metadata
+        rawData ?= JSON.stringify data
+
+        values = [
+          'response:metadata', metadataStr
+          'response:data', rawData
+        ]
 
         async.series [
           async.apply @client.hmset, responseId, values

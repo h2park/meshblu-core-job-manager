@@ -109,8 +109,8 @@ class JobManager
 
       requestMetadata ?= {}
 
-      metadata.jobLogs = requestMetadata.jobLogs
-      metadata.metrics = requestMetadata.metrics
+      metadata.jobLogs = requestMetadata.jobLogs if requestMetadata.jobLogs?
+      metadata.metrics = requestMetadata.metrics if requestMetadata.metrics?
 
       @addMetric metadata, 'enqueueResponseAt', (error) =>
         return callback error if error?

@@ -96,11 +96,6 @@ class JobManager
       delete error.code if error?
       return callback error if error?
 
-      try
-        requestMetadata = JSON.parse result['request:metadata']
-      catch
-        requestMetadata = {}
-
       ignoreResponse = result['request:ignoreResponse']
 
       if ignoreResponse == 1
@@ -108,6 +103,11 @@ class JobManager
           delete error.code if error?
           callback error
         return
+
+      try
+        requestMetadata = JSON.parse result['request:metadata']
+      catch
+        requestMetadata = {}
 
       metadata.jobLogs = requestMetadata.jobLogs
       metadata.metrics = requestMetadata.metrics

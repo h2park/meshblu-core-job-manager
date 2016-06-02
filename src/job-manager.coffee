@@ -184,7 +184,7 @@ class JobManager
         delete error.code if error?
         return callback error if error?
 
-        @client.del key, "#{responseQueue}:#{responseId}", responseId, (error) =>
+        @client.del key, "#{responseQueue}:#{responseId}", (error) =>
           delete error.code if error?
           return callback error if error?
 

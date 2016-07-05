@@ -56,7 +56,6 @@ class JobManager
     return callback() unless @maxQueueLength > 0
     @client.llen "#{requestQueueName}:queue", (error, queueLength) =>
       return callback error if error?
-      console.log {queueLength, @maxQueueLength}
       return callback() if queueLength <= @maxQueueLength
 
       error = new Error 'Maximum Capacity Exceeded'

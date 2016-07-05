@@ -5,7 +5,14 @@ uuid  = require 'uuid'
 
 class JobManager
   constructor: (options={}) ->
-    {@client,@jobLogSampleRate,@overrideRefreshSeconds,@timeoutSeconds,@overrideKey} = options
+    {
+      @client
+      @jobLogSampleRate
+      @maxQueueLength
+      @overrideRefreshSeconds
+      @timeoutSeconds
+      @overrideKey
+    } = options
     @overrideRefreshSeconds ?= 60
 
     # allow null to disable @overrideKey checking
@@ -15,6 +22,7 @@ class JobManager
     throw new Error 'JobManager constructor is missing "client"' unless @client?
     throw new Error 'JobManager constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
+    throw new Error 'JobManager constructor is missing "maxQueueLength"' unless @maxQueueLength?
 
     if @overrideKey?
       @updateOverrideUuids()
@@ -22,6 +30,9 @@ class JobManager
 
     @client.on 'error', =>
       clearInterval @overrideInterval
+
+  updateMaxQueueLength: (@maxQueueLength, callback=->) =>
+    callback?()
 
   updateOverrideUuids: (callback=->) =>
     @client.smembers @overrideKey, (error, @jobLogSampleRateOverrideUuids) =>
@@ -33,54 +44,66 @@ class JobManager
     metadata.metrics[metricName] = Date.now()
     callback()
 
-  createForeverRequest: (requestQueue, options, callback) =>
+  _checkMaxQueueLength: ({requestQueueName}, callback) =>
+    @client.llen "#{requestQueueName}:queue", (error, queueLength) =>
+      return callback error if error?
+      return callback() if queueLength <= @maxQueueLength
+
+      error = new Error 'Maximum Capacity Exceeded'
+      error.code = 503
+      callback error
+
+  createForeverRequest: (requestQueueName, options, callback) =>
     {metadata,data,rawData,ignoreResponse} = options
     metadata = _.clone metadata
     metadata.responseId ?= uuid.v4()
 
-    metadata.jobLogs = []
-    if Math.random() < @jobLogSampleRate
-      metadata.jobLogs.push 'sampled'
-
-    unless _.isEmpty @jobLogSampleRateOverrideUuids
-      uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid ]
-      matches = _.intersection @jobLogSampleRateOverrideUuids, uuids
-      unless _.isEmpty matches
-        metadata.jobLogs.push 'override'
-
-    if _.isEmpty metadata.jobLogs
-      delete metadata.jobLogs
-
-    if _.isArray metadata.jobLogs
-      metadata.metrics = {}
-
-    @addMetric metadata, 'enqueueRequestAt', (error) =>
+    @_checkMaxQueueLength {requestQueueName}, (error) =>
       return callback error if error?
-      {responseId} = metadata
-      data ?= null
 
-      metadataStr = JSON.stringify metadata
-      rawData ?= JSON.stringify data
+      metadata.jobLogs = []
+      if Math.random() < @jobLogSampleRate
+        metadata.jobLogs.push 'sampled'
 
-      values = [
-        'request:metadata', metadataStr
-        'request:data', rawData
-        'request:createdAt', Date.now()
-      ]
+      unless _.isEmpty @jobLogSampleRateOverrideUuids
+        uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid ]
+        matches = _.intersection @jobLogSampleRateOverrideUuids, uuids
+        unless _.isEmpty matches
+          metadata.jobLogs.push 'override'
 
-      if ignoreResponse
-        values.push 'request:ignoreResponse'
-        values.push 1
+      if _.isEmpty metadata.jobLogs
+        delete metadata.jobLogs
 
-      async.series [
-        async.apply @client.hmset, responseId, values
-        async.apply @client.lpush, "#{requestQueue}:queue", responseId
-      ], (error) =>
-        delete error.code if error?
-        callback error, responseId
+      if _.isArray metadata.jobLogs
+        metadata.metrics = {}
 
-  createRequest: (requestQueue, options, callback) =>
-    @createForeverRequest requestQueue, options, (error, responseId) =>
+      @addMetric metadata, 'enqueueRequestAt', (error) =>
+        return callback error if error?
+        {responseId} = metadata
+        data ?= null
+
+        metadataStr = JSON.stringify metadata
+        rawData ?= JSON.stringify data
+
+        values = [
+          'request:metadata', metadataStr
+          'request:data', rawData
+          'request:createdAt', Date.now()
+        ]
+
+        if ignoreResponse
+          values.push 'request:ignoreResponse'
+          values.push 1
+
+        async.series [
+          async.apply @client.hmset, responseId, values
+          async.apply @client.lpush, "#{requestQueueName}:queue", responseId
+        ], (error) =>
+          delete error.code if error?
+          callback error, responseId
+
+  createRequest: (requestQueueName, options, callback) =>
+    @createForeverRequest requestQueueName, options, (error, responseId) =>
       return callback error if error?
       @client.expire responseId, @timeoutSeconds, (error) =>
         delete error.code if error?
@@ -137,16 +160,16 @@ class JobManager
           return callback error if error?
           return callback null, {metadata, rawData}
 
-  do: (requestQueue, responseQueue, options, callback) =>
+  do: (requestQueueName, responseQueue, options, callback) =>
     options = _.clone options
 
-    @createRequest requestQueue, options, (error, responseId) =>
+    @createRequest requestQueueName, options, (error, responseId) =>
       return callback error if error?
       @getResponse responseQueue, responseId, callback
 
-  getRequest: (requestQueues, callback) =>
-    return callback new Error 'First argument must be an array' unless _.isArray requestQueues
-    queues = _.map requestQueues, (queue) => "#{queue}:queue"
+  getRequest: (requestQueueNames, callback) =>
+    return callback new Error 'First argument must be an array' unless _.isArray requestQueueNames
+    queues = _.map requestQueueNames, (queue) => "#{queue}:queue"
     @client.brpop queues..., @timeoutSeconds, (error, result) =>
       return callback error if error?
       return callback() unless result?

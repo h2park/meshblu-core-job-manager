@@ -7,37 +7,57 @@ uuid  = require 'uuid'
 JobManager = require '../src/job-manager'
 
 describe 'JobManager', ->
-  beforeEach ->
+  beforeEach (done) ->
     @redisId = uuid.v4()
     @client = new RedisNS 'ns', redis.createClient(@redisId)
+    @client.on 'ready', done
 
+  beforeEach ->
     @sut = new JobManager
       client: new RedisNS 'ns', redis.createClient(@redisId)
       timeoutSeconds: 1
       jobLogSampleRate: 1
+      maxQueueLength: 1000
 
   describe 'when instantiated without a timeout', ->
     it 'should blow up', ->
-      expect(=> new JobManager client: @client, jobLogSampleRate: 0).to.throw 'JobManager constructor is missing "timeoutSeconds"'
+      expect(=> new JobManager client: @client, jobLogSampleRate: 0, maxQueueLength: 0).to.throw 'JobManager constructor is missing "timeoutSeconds"'
 
   describe 'when instantiated without a client', ->
     it 'should blow up', ->
-      expect(=> new JobManager timeoutSeconds: 1, jobLogSampleRate: 0).to.throw 'JobManager constructor is missing "client"'
+      expect(=> new JobManager timeoutSeconds: 1, jobLogSampleRate: 0, maxQueueLength: 0).to.throw 'JobManager constructor is missing "client"'
 
   describe 'when instantiated without a jobLogSampleRate', ->
     it 'should blow up', ->
-      expect(=> new JobManager client: @client, timeoutSeconds: 1).to.throw 'JobManager constructor is missing "jobLogSampleRate"'
+      expect(=> new JobManager client: @client, timeoutSeconds: 1, maxQueueLength: 0).to.throw 'JobManager constructor is missing "jobLogSampleRate"'
 
-  describe 'with override-uuids set', ->
-    beforeEach ->
-      @client = new RedisNS 'ns', redis.createClient(@redisId)
+  context 'when the maxQueueLength is exceeded', ->
+    beforeEach (done) ->
+      @sut.updateMaxQueueLength 1, done
 
+    beforeEach (done) ->
+      @client.lpush 'request:queue', 'something', done
+
+    describe '->createRequest', ->
+      context 'when called with a request', ->
+        beforeEach (done) ->
+          options =
+            metadata:
+              auth: uuid: 'some-uuid'
+
+          @sut.createRequest 'request', options, (@error) => done()
+
+        it 'should return an error', ->
+          expect(@error.code).to.equal 503
+
+  context 'with override-uuids set', ->
     beforeEach ->
       @sut = new JobManager
         client: @client
         timeoutSeconds: 1
         jobLogSampleRate: 0
         overrideKey: 'override-my-uuids'
+        maxQueueLength: 1000
 
     beforeEach (done) ->
       @client.sadd 'override-my-uuids', 'some-uuid', done
@@ -256,6 +276,7 @@ describe 'JobManager', ->
             client: new RedisNS 'ns', redis.createClient(@redisId)
             timeoutSeconds: 1
             jobLogSampleRate: 0
+            maxQueueLength: 1000
 
           jobManager.getRequest ['request'], (error, request) =>
             return done error if error?

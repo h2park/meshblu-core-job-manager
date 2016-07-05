@@ -17,23 +17,31 @@ describe 'JobManager', ->
       client: new RedisNS 'ns', redis.createClient(@redisId)
       timeoutSeconds: 1
       jobLogSampleRate: 1
-      maxQueueLength: 1000
 
   describe 'when instantiated without a timeout', ->
     it 'should blow up', ->
-      expect(=> new JobManager client: @client, jobLogSampleRate: 0, maxQueueLength: 0).to.throw 'JobManager constructor is missing "timeoutSeconds"'
+      expect(=> new JobManager client: @client, jobLogSampleRate: 0).to.throw 'JobManager constructor is missing "timeoutSeconds"'
 
   describe 'when instantiated without a client', ->
     it 'should blow up', ->
-      expect(=> new JobManager timeoutSeconds: 1, jobLogSampleRate: 0, maxQueueLength: 0).to.throw 'JobManager constructor is missing "client"'
+      expect(=> new JobManager timeoutSeconds: 1, jobLogSampleRate: 0).to.throw 'JobManager constructor is missing "client"'
 
   describe 'when instantiated without a jobLogSampleRate', ->
     it 'should blow up', ->
-      expect(=> new JobManager client: @client, timeoutSeconds: 1, maxQueueLength: 0).to.throw 'JobManager constructor is missing "jobLogSampleRate"'
+      expect(=> new JobManager client: @client, timeoutSeconds: 1).to.throw 'JobManager constructor is missing "jobLogSampleRate"'
 
   context 'when the maxQueueLength is exceeded', ->
     beforeEach (done) ->
-      @sut.updateMaxQueueLength 1, done
+      @client.set 'request:max-queue-length', '1', done
+
+    afterEach (done) ->
+      @client.del 'request:max-queue-length', done
+
+    beforeEach (done) ->
+      @sut.updateMaxQueueLength done
+
+    beforeEach (done) ->
+      @client.lpush 'request:queue', 'something', done
 
     beforeEach (done) ->
       @client.lpush 'request:queue', 'something', done
@@ -57,7 +65,6 @@ describe 'JobManager', ->
         timeoutSeconds: 1
         jobLogSampleRate: 0
         overrideKey: 'override-my-uuids'
-        maxQueueLength: 1000
 
     beforeEach (done) ->
       @client.sadd 'override-my-uuids', 'some-uuid', done
@@ -276,7 +283,6 @@ describe 'JobManager', ->
             client: new RedisNS 'ns', redis.createClient(@redisId)
             timeoutSeconds: 1
             jobLogSampleRate: 0
-            maxQueueLength: 1000
 
           jobManager.getRequest ['request'], (error, request) =>
             return done error if error?

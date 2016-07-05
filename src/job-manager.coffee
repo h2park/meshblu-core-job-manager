@@ -8,12 +8,11 @@ class JobManager
     {
       @client
       @jobLogSampleRate
-      @maxQueueLength
-      @overrideRefreshSeconds
+      @dynamicOptionsRefreshSeconds
       @timeoutSeconds
       @overrideKey
     } = options
-    @overrideRefreshSeconds ?= 60
+    @dynamicOptionsRefreshSeconds ?= 60
 
     # allow null to disable @overrideKey checking
     if _.isUndefined @overrideKey
@@ -22,19 +21,28 @@ class JobManager
     throw new Error 'JobManager constructor is missing "client"' unless @client?
     throw new Error 'JobManager constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
-    throw new Error 'JobManager constructor is missing "maxQueueLength"' unless @maxQueueLength?
 
-    if @overrideKey?
-      @updateOverrideUuids()
-      @overrideInterval = setInterval @updateOverrideUuids, @overrideRefreshSeconds * 1000
+    @updateOverrideUuids()
+    @updateDynamicOptionsInterval = setInterval @_updateDynamicOptions, @dynamicOptionsRefreshSeconds * 1000
 
     @client.on 'error', =>
-      clearInterval @overrideInterval
+      clearInterval @updateDynamicOptionsInterval
 
-  updateMaxQueueLength: (@maxQueueLength, callback=->) =>
-    callback?()
+  _updateDynamicOptions: (callback=->) =>
+    tasks = [
+      @updateMaxQueueLength
+      @updateOverrideUuids
+    ]
+
+    async.each tasks, callback
+
+  updateMaxQueueLength: (callback=->) =>
+    @client.get 'request:max-queue-length', (error, result) =>
+      @maxQueueLength = parseInt(result ? 0)
+      callback error
 
   updateOverrideUuids: (callback=->) =>
+    return callback unless @overrideKey?
     @client.smembers @overrideKey, (error, @jobLogSampleRateOverrideUuids) =>
       callback error
 
@@ -45,8 +53,10 @@ class JobManager
     callback()
 
   _checkMaxQueueLength: ({requestQueueName}, callback) =>
+    return callback() unless @maxQueueLength > 0
     @client.llen "#{requestQueueName}:queue", (error, queueLength) =>
       return callback error if error?
+      console.log {queueLength, @maxQueueLength}
       return callback() if queueLength <= @maxQueueLength
 
       error = new Error 'Maximum Capacity Exceeded'

@@ -15,3 +15,11 @@ Add the uuid to the redis set specified in `overrideKey`. (defaults to `override
 ```
 redis-cli SADD meshblu:override-uuids b3ad254f-0ef1-401b-9c1b-22c429a60208
 ```
+
+# Change maxQueueLength
+
+Set 'request:max-queue-length' to an integer value. If unset, queue length is unlimited
+
+```
+redis-cli SET meshblu:request:max-queue-length 1000
+```

@@ -23,6 +23,7 @@ class JobManager
     throw new Error 'JobManager constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
 
     @updateOverrideUuids()
+    @updateMaxQueueLength()
     @updateDynamicOptionsInterval = setInterval @_updateDynamicOptions, @dynamicOptionsRefreshSeconds * 1000
 
     @client.on 'error', =>

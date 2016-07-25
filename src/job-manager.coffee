@@ -26,9 +26,6 @@ class JobManager
     @updateMaxQueueLength()
     @updateDynamicOptionsInterval = setInterval @_updateDynamicOptions, @dynamicOptionsRefreshSeconds * 1000
 
-    @client.on 'error', =>
-      clearInterval @updateDynamicOptionsInterval
-
   _updateDynamicOptions: (callback=->) =>
     tasks = [
       @updateMaxQueueLength

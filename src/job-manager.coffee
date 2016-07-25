@@ -130,7 +130,7 @@ class JobManager
       return callback error if error?
       [requestMetadata, ignoreResponse] = result
 
-      if ignoreResponse == 1
+      if parseInt(ignoreResponse) == 1
         @client.del responseId, (error) =>
           delete error.code if error?
           callback error

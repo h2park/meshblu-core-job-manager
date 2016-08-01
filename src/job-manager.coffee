@@ -61,7 +61,7 @@ class JobManager
       callback error
 
   createForeverRequest: (requestQueueName, options, callback) =>
-    {metadata,data,rawData,ignoreResponse} = options
+    {metadata,data,rawData} = options
     metadata = _.clone metadata
     metadata.responseId ?= uuid.v4()
 
@@ -98,10 +98,6 @@ class JobManager
           'request:createdAt', Date.now()
         ]
 
-        if ignoreResponse
-          values.push 'request:ignoreResponse'
-          values.push 1
-
         async.series [
           async.apply @client.hmset, responseId, values
           async.apply @client.lpush, "#{requestQueueName}:queue", responseId
@@ -120,27 +116,21 @@ class JobManager
     {metadata,data,rawData} = options
     {responseId} = metadata
 
-    fields = [
-      'request:metadata'
-      'request:ignoreResponse'
-    ]
-
-    @client.hmget responseId, fields, (error, result) =>
+    @client.hget responseId, 'request:metadata', (error, result) =>
       delete error.code if error?
       return callback error if error?
-      [requestMetadata, ignoreResponse] = result
 
-      if parseInt(ignoreResponse) == 1
+      try
+        requestMetadata = JSON.parse result
+      catch
+
+      requestMetadata ?= {}
+
+      if requestMetadata.ignoreResponse
         @client.del responseId, (error) =>
           delete error.code if error?
           callback error
         return
-
-      try
-        requestMetadata = JSON.parse requestMetadata
-      catch
-
-      requestMetadata ?= {}
 
       metadata.jobLogs = requestMetadata.jobLogs if requestMetadata.jobLogs?
       metadata.metrics = requestMetadata.metrics if requestMetadata.metrics?

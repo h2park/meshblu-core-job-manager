@@ -209,6 +209,26 @@ describe 'JobManager', ->
           done()
 
   describe '->createResponse', ->
+    context 'when called with a ignoreResponse', ->
+      beforeEach (done) ->
+        data =
+          ignoreResponse: true
+        @client.hset 'ignored-response-id', 'request:metadata', JSON.stringify(data), done
+
+      beforeEach (done) ->
+        options =
+          metadata:
+            responseId: 'ignored-response-id'
+            duel: "i'm just in it for the glove slapping"
+
+        @sut.createResponse 'response', options, done
+
+      it 'should not place the job in a queue', (done) ->
+        @client.llen 'response:ignored-response-id', (error, result) =>
+          return done(error) if error?
+          expect(result).to.equal 0
+          done()
+
     context 'when called with a response', ->
       beforeEach (done) ->
         options =

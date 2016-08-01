@@ -222,7 +222,7 @@ class JobManager
           return callback error if error?
 
           [metadata, rawData] = data
-          return callback new Error('Response timeout exceeded'), null unless metadata?
+          return callback new Error('Malformed response, missing metadata'), null unless metadata?
 
           metadata = JSON.parse metadata
           @addMetric metadata, 'dequeueResponseAt', (error) =>

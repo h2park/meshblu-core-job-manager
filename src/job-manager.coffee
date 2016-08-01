@@ -115,6 +115,8 @@ class JobManager
   createResponse: (responseQueue, options, callback) =>
     {metadata,data,rawData} = options
     {responseId} = metadata
+    data ?= null
+    rawData ?= JSON.stringify data
 
     @client.hget responseId, 'request:metadata', (error, result) =>
       delete error.code if error?
@@ -129,7 +131,8 @@ class JobManager
       if requestMetadata.ignoreResponse
         @client.del responseId, (error) =>
           delete error.code if error?
-          callback error
+          return callback error if error?
+          return callback null, {metadata, rawData}
         return
 
       metadata.jobLogs = requestMetadata.jobLogs if requestMetadata.jobLogs?
@@ -137,10 +140,8 @@ class JobManager
 
       @addMetric metadata, 'enqueueResponseAt', (error) =>
         return callback error if error?
-        data ?= null
 
         metadataStr = JSON.stringify metadata
-        rawData ?= JSON.stringify data
 
         values = [
           'response:metadata', metadataStr

@@ -206,7 +206,10 @@ class JobManager
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
       delete error.code if error?
       return callback error if error?
-      return callback new Error('Response timeout exceeded'), null unless result?
+      unless result?
+        error = new Error('Response timeout exceeded')
+        error.code = 504
+        return callback error, null unless result?
 
       [channel,key] = result
 

@@ -26,7 +26,7 @@
     "sinon-chai": "^2.8.0"
   },
   "scripts": {
-    "test": "istanbul cover _mocha -- -R spec --require coffee-coverage/register-istanbul"
+    "test": "istanbul cover _mocha -- -R spec --require coffee-coverage/register-istanbul && mocha --reporter json > coverage/mocha.json"
   },
   "repository": {
     "type": "git",

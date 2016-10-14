@@ -39,11 +39,13 @@ class JobManager
     @client.get 'request:max-queue-length', (error, result) =>
       @maxQueueLength = parseInt(result ? 0)
       callback error
+    return # avoid returning redis
 
   updateOverrideUuids: (callback=->) =>
     return callback unless @overrideKey?
     @client.smembers @overrideKey, (error, @jobLogSampleRateOverrideUuids) =>
       callback error
+    return # avoid returning redis
 
   addMetric: (metadata, metricName, callback) =>
     return callback() unless _.isArray metadata.jobLogs
@@ -60,6 +62,7 @@ class JobManager
       error = new Error 'Maximum Capacity Exceeded'
       error.code = 503
       callback error
+    return # avoid returning redis
 
   createForeverRequest: (requestQueueName, options, callback) =>
     {metadata,data,rawData} = options
@@ -158,6 +161,7 @@ class JobManager
           delete error.code if error?
           return callback error if error?
           return callback null, {metadata, rawData}
+    return # avoid returning redis
 
   do: (requestQueueName, responseQueue, options, callback) =>
     options = _.clone options
@@ -193,6 +197,7 @@ class JobManager
           @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
             return callback error if error?
             callback null, request
+    return # avoid returning redis
 
   getResponse: (responseQueue, responseId, callback) =>
     @client.brpop "#{responseQueue}:#{responseId}", @timeoutSeconds, (error, result) =>
@@ -225,5 +230,6 @@ class JobManager
               rawData: rawData
 
             callback null, response
+    return # avoid returning redis
 
 module.exports = JobManager

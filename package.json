@@ -1,6 +1,6 @@
 {
   "name": "meshblu-core-job-manager",
-  "version": "7.1.2",
+  "version": "7.1.3",
   "description": "Meshblu Core Job Manager",
   "main": "index.js",
   "directories": {

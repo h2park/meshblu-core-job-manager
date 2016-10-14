@@ -33,6 +33,7 @@ class JobManager
     ]
 
     async.each tasks, callback
+    return # avoid returning async
 
   updateMaxQueueLength: (callback=->) =>
     @client.get 'request:max-queue-length', (error, result) =>

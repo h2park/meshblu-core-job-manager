@@ -1,6 +1,6 @@
-chai      = require 'chai'
-sinon     = require 'sinon'
-sinonChai = require 'sinon-chai'
+chai       = require 'chai'
+sinon      = require 'sinon'
+sinonChai  = require 'sinon-chai'
 chaiSubset = require 'chai-subset'
 
 chai.use sinonChai

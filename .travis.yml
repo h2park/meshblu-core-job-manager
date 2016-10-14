@@ -1,26 +1,19 @@
 language: node_js
 node_js:
 - '5'
-addons:
-  code_climate:
-    repo_token: 87f79c7a3404324e0a7d54d97fe98f3a7e2f09e7a9e8e91050999bc9cf675103
-before_script:
-- npm install -g codeclimate-test-reporter
-after_script:
-- codeclimate-test-reporter < coverage/lcov.info
-deploy:
-  provider: npm
-  email: serveradmin@octoblu.com
-  api_key:
-    secure: digUR8SzQHy1TekRl+G7hgumPZGBbexUAUkl2XZiZjsFT+1mxEjnKVifJOXTIy5CkAm23B/ediNsmfaEfz7J75txwYSyApk19NczE2KmOWFMxgihBOPzX7U0LOdLHcu2+M9DrZjl1Zv/0PlyECOsGyWGsFS4WQgyjEQVIi8sSiY64P82fCRo3MwRG74wMGERvgcZ03jnaC0nWZpSF7HXJ4Lv159m9W4ofCYINtq2pJ3TiQ//cI2RuUNapI7kc7G474yZ2ptbQopz2w2/jiyXywOsSgZFWFDStqqP8gjaoKuuXaIe/rM5taBbZJG/SqnLYuzNOpdHtCiTrlhNGbV0jo5bWwDYik/zyRZFa4s3uML8C0vu7wSCaFnm5TqI/9LErTWKaMP7ifAyYwd1EKpcT/VcoSRXipWh0fTCxp7J8H04WCDD+W/mIVdQeC3xrYSsg/6I1HnzVLV5fHQIKQ/+32dnXxZ5oPkFoGKEvEvu7ia2zoY/6ASxu3+Z3iQzkTlvn3fvNogL/t7JqLjgk8gZV0aPhnUxa5OqPMXsa3KcZh0+W2pjBFdNb2LKq2M3FFDYz/SZzrf/rrMHSj8RrTzvFinca5lB4mXTRyji5mlDTyrKISU7MhROx0Xqh9G+u2PLciBXH+r8H3IbniTb1LLoqifR2gt9MfXaddoMYgkEjLg=
-  on:
-    tags: true
-    branches: true
 branches:
   only:
-  - "/^v[0-9]/"
+  - /^v[0-9]/
 after_success:
 - npm run coverage
 - npm run mocha:json
 - bash <(curl -s https://codecov.io/bash)
 - bash <(curl -s https://codecov.octoblu.com/bash)
+deploy:
+  provider: npm
+  email: serveradmin@octoblu.com
+  api_key:
+    secure: e2O3TVa7nqsUXeko5FyH/M31VxPQOaguKKB472wwBizzQoHijQJgC4wt5K3+d3yKlD5DlvNQmwK3FEI/cm2zjPDHiYWEb2s5lECBd16jjaDLoLHu4QTLjsyEZsnU9YnJJMpXzgJyb47uIXrzJ4XIWh5OuSUY8F8JEe5l8bU1bP+LzE/Sfmom3m8rQSZxfsD6jUnYZ6apqN6z29Jse03/ubZd8/d7OpwHg9t7QWkfGLFsQ8zmTmL83CTXdJJ0WAJkNAwLAFg6Ki1o1P9OcFfHEX9CnUhgsvSo6CffIhTTFwmNQj+l+pjUHmCV1C8Znz6ko9Vyl7kwlKgjI8dLcb/WhLs4x/a8lSvn5YXdWWP+lZQAYmXy6tI54z0b6uR0Y5ylXw9JKeyOst9dMZScvOePkyLg0ty3lnDUXa7xm+fa24oDiKDDeIdSh/YYNwWxh7060x0xTeDIgvvF421ed3ERwnUu/T+tXkppQMg1sZpT45JheCgXdBtXLVstlRW+gb78Y/jUvWPWRG/Pk1CiSBLwXduWqk36u+2xDn2UXrGJSDqHDNs9+McGieTgx3tzCv2fDr4VDqwuZnVLvJxWNwZj0hMTHcBRgt3gcnsIHk0pQ9gOB2CW1lU251HLo65tL5e4Z9Bm4UVRZu07+/aPlB23tf/fO9ZEgGoQZJGl0Nf0k9k=
+  on:
+    tags: true
+    branches: true

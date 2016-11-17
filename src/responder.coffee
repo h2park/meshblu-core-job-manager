@@ -2,18 +2,17 @@ _     = require 'lodash'
 async = require 'async'
 debug = require('debug')('meshblu-core-job-manager:job-manager')
 uuid  = require 'uuid'
-{ EventEmitter } = require 'events'
 
-class JobManagerResponder extends EventEmitter
+class JobManagerResponder
   constructor: (options={}) ->
     {
       @client
       @queueClient
       @jobLogSampleRate
-      @timeoutSeconds
+      @jobTimeoutSeconds
+      @queueTimeoutSeconds
       @maxQueueLength
       @jobLogSampleRateOverrideUuids
-      @responseQueueName
       @requestQueueName
     } = options
     @maxQueueLength ?= 10000
@@ -22,9 +21,9 @@ class JobManagerResponder extends EventEmitter
     throw new Error 'JobManagerResponder constructor is missing "client"' unless @client?
     throw new Error 'JobManagerResponder constructor is missing "queueClient"' unless @queueClient?
     throw new Error 'JobManagerResponder constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
-    throw new Error 'JobManagerResponder constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
+    throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
+    throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
     throw new Error 'JobManagerResponder constructor is missing "requestQueueName"' unless @requestQueueName?
-    throw new Error 'JobManagerResponder constructor is missing "responseQueueName"' unless @responseQueueName?
 
   addMetric: (metadata, metricName, callback) =>
     return callback() unless _.isArray metadata.jobLogs
@@ -33,17 +32,21 @@ class JobManagerResponder extends EventEmitter
     callback()
 
   createResponse: (options, callback) =>
-    {metadata,data,rawData} = options
-    {responseId} = metadata
+    { metadata, data, rawData } = options
+    { responseId } = metadata
     data ?= null
     rawData ?= JSON.stringify data
 
-    @client.hget responseId, 'request:metadata', (error, result) =>
+    @client.hmget responseId, ['request:metadata', 'response:queueName'], (error, result) =>
       delete error.code if error?
       return callback error if error?
 
+      [ requestMetadata, responseQueueName ] = result ? []
+
+      return callback new Error 'missing responseQueueName' unless responseQueueName?
+
       try
-        requestMetadata = JSON.parse result
+        requestMetadata = JSON.parse requestMetadata
       catch
 
       requestMetadata ?= {}
@@ -70,27 +73,34 @@ class JobManagerResponder extends EventEmitter
 
         async.series [
           async.apply @client.hmset, responseId, values
-          async.apply @client.expire, responseId, @timeoutSeconds
-          async.apply @client.lpush, "#{@responseQueueName}:#{responseId}", responseId
-          async.apply @client.expire, "#{@responseQueueName}:#{responseId}", @timeoutSeconds
+          async.apply @client.lpush, responseQueueName, responseId
+          async.apply @client.expire, responseId, @jobTimeoutSeconds
         ], (error) =>
           delete error.code if error?
           return callback error if error?
           return callback null, {metadata, rawData}
     return # avoid returning redis
 
-  getRequest: (callback) =>
-    @queueClient.brpop @requestQueueName, @timeoutSeconds, (error, result) =>
-      return callback error if error?
-      return callback() unless result?
+  do: (next, callback=_.noop) =>
+    async.retry @getRequest, (error, result) =>
+      return callback() if error?
+      return callback() if _.isEmpty result
+      next result, (error, response) =>
+        return callback error if error?
+        @createResponse response, callback
 
-      [channel,key] = result
+  getRequest: (callback) =>
+    @queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
+      return callback error if error?
+      return callback new Error 'No Result' unless result?
+
+      [ channel, key ] = result
 
       @client.hgetall key, (error, result) =>
         delete error.code if error?
         return callback error if error?
-        return callback() unless result?
-        return callback() unless result['request:metadata']?
+        return callback new Error 'Missing result' if _.isEmpty result
+        return callback new Error 'Missing metadata' if _.isEmpty result['request:metadata']
 
         metadata = JSON.parse result['request:metadata']
         @addMetric metadata, 'dequeueRequestAt', (error) =>

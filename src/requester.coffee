@@ -1,7 +1,7 @@
-_     = require 'lodash'
-async = require 'async'
-debug = require('debug')('meshblu-core-job-manager:job-manager')
-uuid  = require 'uuid'
+_                = require 'lodash'
+async            = require 'async'
+debug            = require('debug')('meshblu-core-job-manager:job-manager')
+UUID             = require 'uuid'
 { EventEmitter } = require 'events'
 
 class JobManagerRequester extends EventEmitter
@@ -10,7 +10,8 @@ class JobManagerRequester extends EventEmitter
       @client
       @queueClient
       @jobLogSampleRate
-      @timeoutSeconds
+      @jobTimeoutSeconds
+      @queueTimeoutSeconds
       @maxQueueLength
       @jobLogSampleRateOverrideUuids
       @responseQueueName
@@ -22,9 +23,18 @@ class JobManagerRequester extends EventEmitter
     throw new Error 'JobManagerRequester constructor is missing "client"' unless @client?
     throw new Error 'JobManagerRequester constructor is missing "queueClient"' unless @queueClient?
     throw new Error 'JobManagerRequester constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
-    throw new Error 'JobManagerRequester constructor is missing "timeoutSeconds"' unless @timeoutSeconds?
+    throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
+    throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
     throw new Error 'JobManagerRequester constructor is missing "requestQueueName"' unless @requestQueueName?
     throw new Error 'JobManagerRequester constructor is missing "responseQueueName"' unless @responseQueueName?
+
+  _addResponseIdToOptions: (options) =>
+    options = _.clone options
+    { metadata } = options
+    metadata = _.clone metadata
+    metadata.responseId ?= @generateResponseId()
+    options.metadata = metadata
+    return options
 
   addMetric: (metadata, metricName, callback) =>
     return callback() unless _.isArray metadata.jobLogs
@@ -44,9 +54,8 @@ class JobManagerRequester extends EventEmitter
     return # avoid returning redis
 
   createForeverRequest: (options, callback) =>
+    options = @_addResponseIdToOptions options
     {metadata,data,rawData} = options
-    metadata = _.clone metadata
-    metadata.responseId ?= uuid.v4()
 
     @_checkMaxQueueLength (error) =>
       return callback error if error?
@@ -56,7 +65,7 @@ class JobManagerRequester extends EventEmitter
         metadata.jobLogs.push 'sampled'
 
       unless _.isEmpty @jobLogSampleRateOverrideUuids
-        uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid ]
+        uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid, metadata.auth?.as ]
         matches = _.intersection @jobLogSampleRateOverrideUuids, uuids
         unless _.isEmpty matches
           metadata.jobLogs.push 'override'
@@ -69,7 +78,7 @@ class JobManagerRequester extends EventEmitter
 
       @addMetric metadata, 'enqueueRequestAt', (error) =>
         return callback error if error?
-        {responseId} = metadata
+        { responseId } = metadata
         data ?= null
 
         metadataStr = JSON.stringify metadata
@@ -79,6 +88,7 @@ class JobManagerRequester extends EventEmitter
           'request:metadata', metadataStr
           'request:data', rawData
           'request:createdAt', Date.now()
+          'response:queueName', @responseQueueName
         ]
 
         async.series [
@@ -92,49 +102,75 @@ class JobManagerRequester extends EventEmitter
   createRequest: (options, callback) =>
     @createForeverRequest options, (error, responseId) =>
       return callback error if error?
-      @client.expire responseId, @timeoutSeconds, (error) =>
+      @client.expire responseId, @jobTimeoutSeconds, (error) =>
         delete error.code if error?
-        callback error, responseId
+        return callback error if error?
+        callback null, responseId
+
     return # avoid returning redis
 
   do: (options, callback) =>
-    options = _.clone options
+    callback = _.once callback
+    options = @_addResponseIdToOptions options
+    responseId = _.get options, 'metadata.responseId'
+    return callback new Error 'do requires metadata.responseId' unless responseId?
 
-    @createRequest options, (error, responseId) =>
-      return callback error if error?
-      @getResponse responseId, callback
+    @once "response:#{responseId}", (data) =>
+      clearTimeout responseTimeout if responseTimeout?
+      @removeListener "error:#{responseId}", callback
+      callback null, data
 
-  getResponse: (responseId, callback) =>
-    @queueClient.brpop "#{@responseQueueName}:#{responseId}", @timeoutSeconds, (error, result) =>
-      delete error.code if error?
-      return callback error if error?
-      unless result?
+    @once "error:#{responseId}", (error) =>
+      clearTimeout responseTimeout if responseTimeout?
+      @removeListener "response:#{responseId}", callback
+      callback error
+
+    @createRequest options, (error) =>
+      return @emit "error:#{responseId}", error if error?
+      responseTimeout = setTimeout =>
         error = new Error('Response timeout exceeded')
         error.code = 504
-        return callback error, null unless result?
+        @emit "error:#{responseId}", error
+      , @jobTimeoutSeconds * 1000
 
-      [channel,key] = result
+  _emitResponses: (callback) =>
+    @queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
+      delete error.code if error?
+      return callback error if error?
+      return callback() unless result?
+
+      [ channel, key ] = result
 
       @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
         delete error.code if error?
         return callback error if error?
 
-        @client.del key, "#{@responseQueueName}:#{responseId}", (error) =>
-          delete error.code if error?
+        [ metadata, rawData ] = data
+        return callback new Error 'Malformed response, missing metadata' if _.isEmpty metadata
+
+        metadata = JSON.parse metadata
+        { responseId } = metadata
+
+        @addMetric metadata, 'dequeueResponseAt', (error) =>
           return callback error if error?
 
-          [metadata, rawData] = data
-          return callback new Error('Malformed response, missing metadata'), null unless metadata?
+          response =
+            metadata: metadata
+            rawData: rawData
 
-          metadata = JSON.parse metadata
-          @addMetric metadata, 'dequeueResponseAt', (error) =>
-            return callback error if error?
-
-            response =
-              metadata: metadata
-              rawData: rawData
-
-            callback null, response
+          @emit "response:#{responseId}", response
+          callback()
     return # avoid returning redis
+
+  generateResponseId: =>
+    UUID.v4()
+
+  startProcessing: =>
+    @_allowProcessing = true
+
+    async.doWhilst @_emitResponses, => @_allowProcessing
+
+  stopProcessing: =>
+    @_allowProcessing = false
 
 module.exports = JobManagerRequester

@@ -1,2 +1,7 @@
 require('coffee-script/register');
-module.exports = require('./src/job-manager');
+var JobManagerRequester = require('./src/requester');
+var JobManagerResponder = require('./src/responder');
+module.exports = {
+  JobManagerRequester: JobManagerRequester,
+  JobManagerResponder: JobManagerResponder
+}

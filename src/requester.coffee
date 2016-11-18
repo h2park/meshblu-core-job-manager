@@ -135,31 +135,36 @@ class JobManagerRequester extends EventEmitter
 
   _emitResponses: (callback) =>
     @queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
-      delete error.code if error?
-      return callback error if error?
+      console.error error.stack if error?
       return callback() unless result?
 
       [ channel, key ] = result
+      @_getResponse key, (error, response) =>
+        return console.error error.stack if error?
+        return if _.isEmpty response
+        responseId = _.get response, 'metadata.responseId'
 
-      @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
-        delete error.code if error?
+        @emit "response:#{responseId}", response
+        callback()
+
+  _getResponse: (key, callback) =>
+    @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
+      delete error.code if error?
+      return callback error if error?
+
+      [ metadata, rawData ] = data
+      return callback new Error 'Malformed response, missing metadata' if _.isEmpty metadata
+
+      metadata = JSON.parse metadata
+
+      @addMetric metadata, 'dequeueResponseAt', (error) =>
         return callback error if error?
 
-        [ metadata, rawData ] = data
-        return callback new Error 'Malformed response, missing metadata' if _.isEmpty metadata
+        response =
+          metadata: metadata
+          rawData: rawData
 
-        metadata = JSON.parse metadata
-        { responseId } = metadata
-
-        @addMetric metadata, 'dequeueResponseAt', (error) =>
-          return callback error if error?
-
-          response =
-            metadata: metadata
-            rawData: rawData
-
-          @emit "response:#{responseId}", response
-          callback()
+        callback null, response
     return # avoid returning redis
 
   generateResponseId: =>
@@ -168,7 +173,8 @@ class JobManagerRequester extends EventEmitter
   startProcessing: =>
     @_allowProcessing = true
 
-    async.doWhilst @_emitResponses, => @_allowProcessing
+    async.doWhilst @_emitResponses, (=> @_allowProcessing), (error) =>
+      console.error error.stack if error?
 
   stopProcessing: =>
     @_allowProcessing = false

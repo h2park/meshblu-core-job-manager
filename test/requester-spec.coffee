@@ -1,39 +1,35 @@
-_                   = require 'lodash'
-async               = require 'async'
-Redis               = require 'ioredis'
-RedisNS             = require '@octoblu/redis-ns'
-uuid                = require 'uuid'
-{JobManagerRequester, JobManagerResponder} = require '..'
+_       = require 'lodash'
+async   = require 'async'
+Redis   = require 'ioredis'
+RedisNS = require '@octoblu/redis-ns'
+UUID    = require 'uuid'
+{ JobManagerRequester, JobManagerResponder } = require '..'
 
 describe 'JobManagerRequester', ->
-  @timeout 5000
   beforeEach ->
     @jobTimeoutSeconds = 1
     @queueTimeoutSeconds = 1
     @jobLogSampleRate = 1
-    @requestQueueName = 'request:queue'
-    @responseQueueName = 'response:queue'
+    queueId = UUID.v4()
+    @requestQueueName = "request:queue:#{queueId}"
+    @responseQueueName = "response:queue:#{queueId}"
+    @namespace = 'test:job-manager'
+    @redisUri = 'localhost'
+    @maxConnections = 1
 
   beforeEach (done) ->
-    @client = new RedisNS 'test-job-manager', new Redis 'localhost', dropBufferSupport: true
+    @client = new RedisNS @namespace, new Redis @redisUri, dropBufferSupport: true
     @client.on 'ready', done
-
-  beforeEach (done) ->
-    @queueClient = new RedisNS 'test-job-manager', new Redis 'localhost', dropBufferSupport: true
-    @queueClient.on 'ready', done
-
-  beforeEach (done) ->
-    @responderQueueClient = new RedisNS 'test-job-manager', new Redis 'localhost', dropBufferSupport: true
-    @responderQueueClient.on 'ready', done
 
   afterEach (done) ->
     @client.del @requestQueueName, @responseQueueName, 'some-response-id', done
     return # avoid returning redis
 
-  beforeEach ->
+  beforeEach (done) ->
     @sut = new JobManagerRequester {
-      @client
-      @queueClient
+      @namespace
+      @redisUri
+      @maxConnections
       @jobTimeoutSeconds
       @queueTimeoutSeconds
       @jobLogSampleRate
@@ -41,14 +37,26 @@ describe 'JobManagerRequester', ->
       @responseQueueName
     }
 
+    @sut.start done
+
+  beforeEach (done) ->
     @responder = new JobManagerResponder {
-      @client
-      queueClient: @responderQueueClient
+      @namespace
+      @redisUri
+      @maxConnections
       @jobTimeoutSeconds
       @queueTimeoutSeconds
       @jobLogSampleRate
       @requestQueueName
     }
+
+    @responder.start done
+
+  afterEach (done) ->
+    @responder.stop done
+
+  afterEach (done) ->
+    @sut.stop done
 
   describe '->createRequest', ->
     context 'when the maxQueueLength is exceeded', ->
@@ -211,12 +219,6 @@ describe 'JobManagerRequester', ->
         return # avoid returning redis
 
   describe '->do', ->
-    beforeEach ->
-      @sut.startProcessing()
-
-    afterEach ->
-      @sut.stopProcessing()
-
     context 'when called with a request', ->
       beforeEach ->
         @responder.do (request, next) =>

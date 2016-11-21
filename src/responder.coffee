@@ -1,38 +1,24 @@
-_     = require 'lodash'
-async = require 'async'
-debug = require('debug')('meshblu-core-job-manager:job-manager')
-uuid  = require 'uuid'
+_              = require 'lodash'
+async          = require 'async'
+debug          = require('debug')('meshblu-core-job-manager:job-manager')
+JobManagerBase = require './base'
 
-class JobManagerResponder
+class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
     {
-      @client
-      @queueClient
-      @jobLogSampleRate
       @jobTimeoutSeconds
       @queueTimeoutSeconds
-      @maxQueueLength
-      @jobLogSampleRateOverrideUuids
       @requestQueueName
     } = options
-    @maxQueueLength ?= 10000
-    @jobLogSampleRateOverrideUuids ?= []
 
-    throw new Error 'JobManagerResponder constructor is missing "client"' unless @client?
-    throw new Error 'JobManagerResponder constructor is missing "queueClient"' unless @queueClient?
-    throw new Error 'JobManagerResponder constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
     throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
     throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
     throw new Error 'JobManagerResponder constructor is missing "requestQueueName"' unless @requestQueueName?
 
-  addMetric: (metadata, metricName, callback) =>
-    return callback() unless _.isArray metadata.jobLogs
-    metadata.metrics ?= {}
-    metadata.metrics[metricName] = Date.now()
-    callback()
+    super
 
   createResponse: (options, callback) =>
-    { metadata, data, rawData } = options
+    { metadata, data, rawData } =options
     { responseId } = metadata
     data ?= null
     rawData ?= JSON.stringify data
@@ -77,8 +63,8 @@ class JobManagerResponder
           async.apply @client.expire, responseId, @jobTimeoutSeconds
         ], (error) =>
           delete error.code if error?
-          return callback error if error?
-          return callback null, {metadata, rawData}
+          callback null, { metadata, rawData }
+
     return # avoid returning redis
 
   do: (next, callback=_.noop) =>
@@ -90,30 +76,44 @@ class JobManagerResponder
         @createResponse response, callback
 
   getRequest: (callback) =>
-    @queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
+    @_queuePool.acquire (error, queueClient) =>
       return callback error if error?
-      return callback new Error 'No Result' unless result?
-
-      [ channel, key ] = result
-
-      @client.hgetall key, (error, result) =>
-        delete error.code if error?
+      queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
+        @_queuePool.release queueClient
         return callback error if error?
-        return callback new Error 'Missing result' if _.isEmpty result
-        return callback new Error 'Missing metadata' if _.isEmpty result['request:metadata']
+        return callback new Error 'No Result' unless result?
 
-        metadata = JSON.parse result['request:metadata']
-        @addMetric metadata, 'dequeueRequestAt', (error) =>
+        [ channel, key ] = result
+
+        @client.hgetall key, (error, result) =>
+          delete error.code if error?
           return callback error if error?
+          return callback new Error 'Missing result' if _.isEmpty result
+          return callback new Error 'Missing metadata' if _.isEmpty result['request:metadata']
 
-          request =
-            createdAt: result['request:createdAt']
-            metadata:  metadata
-            rawData:   result['request:data']
-
-          @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
+          metadata = JSON.parse result['request:metadata']
+          @addMetric metadata, 'dequeueRequestAt', (error) =>
             return callback error if error?
-            callback null, request
-    return # avoid returning redis
+
+            request =
+              createdAt: result['request:createdAt']
+              metadata:  metadata
+              rawData:   result['request:data']
+
+            @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
+              return callback error if error?
+              callback null, request
+    return # avoid returning pool
+
+  start: (callback) =>
+    @_commandPool.acquire (error, @client) =>
+      return callback error if error?
+      @client.once 'error', (error) =>
+        @emit 'error', error
+      callback()
+
+  stop: (callback) =>
+    @_commandPool.release @client
+    _.defer callback
 
 module.exports = JobManagerResponder

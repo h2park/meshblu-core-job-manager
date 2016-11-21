@@ -2,13 +2,11 @@ _                = require 'lodash'
 async            = require 'async'
 debug            = require('debug')('meshblu-core-job-manager:job-manager')
 UUID             = require 'uuid'
-{ EventEmitter } = require 'events'
+JobManagerBase   = require './base'
 
-class JobManagerRequester extends EventEmitter
+class JobManagerRequester extends JobManagerBase
   constructor: (options={}) ->
     {
-      @client
-      @queueClient
       @jobLogSampleRate
       @jobTimeoutSeconds
       @queueTimeoutSeconds
@@ -20,13 +18,13 @@ class JobManagerRequester extends EventEmitter
     @maxQueueLength ?= 10000
     @jobLogSampleRateOverrideUuids ?= []
 
-    throw new Error 'JobManagerRequester constructor is missing "client"' unless @client?
-    throw new Error 'JobManagerRequester constructor is missing "queueClient"' unless @queueClient?
     throw new Error 'JobManagerRequester constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
     throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
     throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
     throw new Error 'JobManagerRequester constructor is missing "requestQueueName"' unless @requestQueueName?
     throw new Error 'JobManagerRequester constructor is missing "responseQueueName"' unless @responseQueueName?
+
+    super
 
   _addResponseIdToOptions: (options) =>
     options = _.clone options
@@ -35,12 +33,6 @@ class JobManagerRequester extends EventEmitter
     metadata.responseId ?= @generateResponseId()
     options.metadata = metadata
     return options
-
-  addMetric: (metadata, metricName, callback) =>
-    return callback() unless _.isArray metadata.jobLogs
-    metadata.metrics ?= {}
-    metadata.metrics[metricName] = Date.now()
-    callback()
 
   _checkMaxQueueLength: (callback) =>
     return callback() unless @maxQueueLength > 0
@@ -109,23 +101,23 @@ class JobManagerRequester extends EventEmitter
 
     return # avoid returning redis
 
-  do: (options, callback) =>
+  do: (request, callback) =>
     callback = _.once callback
-    options = @_addResponseIdToOptions options
-    responseId = _.get options, 'metadata.responseId'
+    request = @_addResponseIdToOptions request
+    responseId = _.get request, 'metadata.responseId'
     return callback new Error 'do requires metadata.responseId' unless responseId?
 
-    @once "response:#{responseId}", (data) =>
+    @once "response:#{responseId}", (response) =>
       clearTimeout responseTimeout if responseTimeout?
       @removeListener "error:#{responseId}", callback
-      callback null, data
+      callback null, response
 
     @once "error:#{responseId}", (error) =>
       clearTimeout responseTimeout if responseTimeout?
       @removeListener "response:#{responseId}", callback
       callback error
 
-    @createRequest options, (error) =>
+    @createRequest request, (error) =>
       return @emit "error:#{responseId}", error if error?
       responseTimeout = setTimeout =>
         error = new Error('Response timeout exceeded')
@@ -134,18 +126,21 @@ class JobManagerRequester extends EventEmitter
       , @jobTimeoutSeconds * 1000
 
   _emitResponses: (callback) =>
-    @queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
-      console.error error.stack if error?
-      return callback() unless result?
+    @_queuePool.acquire (error, queueClient) =>
+      return callback error if error?
+      queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
+        @_queuePool.release queueClient
+        console.error error.stack if error? # log error and continue
+        return callback() if _.isEmpty result
 
-      [ channel, key ] = result
-      @_getResponse key, (error, response) =>
-        return console.error error.stack if error?
-        return if _.isEmpty response
-        responseId = _.get response, 'metadata.responseId'
+        [ channel, key ] = result
+        @_getResponse key, (error, response) =>
+          console.error error.stack if error? # log error and continue
+          return callback() if _.isEmpty response
+          responseId = _.get response, 'metadata.responseId'
 
-        @emit "response:#{responseId}", response
-        callback()
+          @emit "response:#{responseId}", response
+          callback()
 
   _getResponse: (key, callback) =>
     @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
@@ -170,13 +165,32 @@ class JobManagerRequester extends EventEmitter
   generateResponseId: =>
     UUID.v4()
 
-  startProcessing: =>
+  start: (callback) =>
+    @_commandPool.acquire (error, @client) =>
+      return callback error if error?
+      @client.once 'error', (error) =>
+        @emit 'error', error
+
+      @_startProcessing callback
+
+  _startProcessing: (callback) =>
     @_allowProcessing = true
-
+    @_stoppedProcessing = false
     async.doWhilst @_emitResponses, (=> @_allowProcessing), (error) =>
-      console.error error.stack if error?
+      @emit 'error', error if error?
+      @_stoppedProcessing = true
+    _.defer callback
 
-  stopProcessing: =>
+  _stopProcessing: (callback) =>
     @_allowProcessing = false
+    async.doWhilst @_waitForStopped, (=> @_stoppedProcessing), callback
+
+  _waitForStopped: (callback) =>
+    _.delay callback, 100
+
+  stop: (callback) =>
+    @_stopProcessing (error) =>
+      @_commandPool.release @client # always release
+      callback error
 
 module.exports = JobManagerRequester

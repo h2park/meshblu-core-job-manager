@@ -132,6 +132,7 @@ class JobManagerRequester extends JobManagerBase
         @_queuePool.release queueClient
         console.error error.stack if error? # log error and continue
         return callback() if _.isEmpty result
+        return callback() unless @_allowProcessing
 
         [ channel, key ] = result
         @_getResponse key, (error, response) =>

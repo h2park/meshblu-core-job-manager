@@ -1,18 +1,15 @@
 _              = require 'lodash'
 async          = require 'async'
+moment         = require 'moment'
 debug          = require('debug')('meshblu-core-job-manager:job-manager')
 JobManagerBase = require './base'
 
 class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
     {
-      @jobTimeoutSeconds
-      @queueTimeoutSeconds
       @requestQueueName
     } = options
 
-    throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
-    throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
     throw new Error 'JobManagerResponder constructor is missing "requestQueueName"' unless @requestQueueName?
 
     super
@@ -78,6 +75,7 @@ class JobManagerResponder extends JobManagerBase
   getRequest: (callback) =>
     @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
+        @_updateHeartbeat()
         @_queuePool.release queueClient
         return callback error if error?
         return callback new Error 'No Result' unless result?

@@ -8,8 +8,6 @@ class JobManagerRequester extends JobManagerBase
   constructor: (options={}) ->
     {
       @jobLogSampleRate
-      @jobTimeoutSeconds
-      @queueTimeoutSeconds
       @maxQueueLength
       @jobLogSampleRateOverrideUuids
       @responseQueueName
@@ -19,8 +17,6 @@ class JobManagerRequester extends JobManagerBase
     @jobLogSampleRateOverrideUuids ?= []
 
     throw new Error 'JobManagerRequester constructor is missing "jobLogSampleRate"' unless @jobLogSampleRate?
-    throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
-    throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
     throw new Error 'JobManagerRequester constructor is missing "requestQueueName"' unless @requestQueueName?
     throw new Error 'JobManagerRequester constructor is missing "responseQueueName"' unless @responseQueueName?
 
@@ -128,6 +124,7 @@ class JobManagerRequester extends JobManagerBase
   _emitResponses: (callback) =>
     @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
+        @_updateHeartbeat()
         @_queuePool.release queueClient
         console.error error.stack if error? # log error and continue
         return callback() if _.isEmpty result

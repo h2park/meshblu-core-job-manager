@@ -1,4 +1,5 @@
 _                = require 'lodash'
+moment           = require 'moment'
 When             = require 'when'
 GenericPool      = require 'generic-pool'
 { EventEmitter } = require 'events'
@@ -16,17 +17,22 @@ class JobManagerBase extends EventEmitter
       @minConnections
       @evictionRunIntervalMillis
       @acquireTimeoutMillis
+      @jobTimeoutSeconds
+      @queueTimeoutSeconds
     } = options
     @idleTimeoutMillis ?= 60000
     @evictionRunIntervalMillis ?= 60000
     @acquireTimeoutMillis ?= 5000
     @minConnections ?= 0
+    @_heartbeat = moment()
 
     throw new Error 'JobManagerResponder constructor is missing "namespace"' unless @namespace?
     throw new Error 'JobManagerResponder constructor is missing "redisUri"' unless @redisUri?
     throw new Error 'JobManagerResponder constructor is missing "idleTimeoutMillis"' unless @idleTimeoutMillis?
     throw new Error 'JobManagerResponder constructor is missing "maxConnections"' unless @maxConnections?
     throw new Error 'JobManagerResponder constructor is missing "minConnections"' unless @minConnections?
+    throw new Error 'JobManagerRequester constructor is missing "jobTimeoutSeconds"' unless @jobTimeoutSeconds?
+    throw new Error 'JobManagerRequester constructor is missing "queueTimeoutSeconds"' unless @queueTimeoutSeconds?
 
     @_queuePool = @_createRedisPool { @maxConnections, @minConnections, @idleTimeoutMillis, @namespace, @redisUri }
     @_commandPool = @_createRedisPool { @maxConnections, @minConnections, @idleTimeoutMillis, @namespace, @redisUri }
@@ -91,5 +97,13 @@ class JobManagerBase extends EventEmitter
       @emit 'factoryCreateError', error
 
     return pool
+
+  healthcheck: (callback) =>
+    healthy = @_heartbeat.isAfter moment().subtract @jobTimeoutSeconds * 2, 'milliseconds'
+    _.defer =>
+      callback null, healthy
+
+  _updateHeartbeat: =>
+    @_heartbeat = moment()
 
 module.exports = JobManagerBase

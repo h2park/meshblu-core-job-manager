@@ -1,5 +1,6 @@
 _       = require 'lodash'
 async   = require 'async'
+moment  = require 'moment'
 Redis   = require 'ioredis'
 RedisNS = require '@octoblu/redis-ns'
 UUID    = require 'uuid'
@@ -238,6 +239,7 @@ describe 'JobManagerRequester', ->
             duel: "i'm just in it for the glove slapping"
             responseId: 'some-response-id'
 
+        @oldHeartbeat = @sut._heartbeat
         @sut.do options, (error, @response) =>
           done error
 
@@ -247,6 +249,9 @@ describe 'JobManagerRequester', ->
             gross: true
             responseId: @responseId
           rawData: 'abcd123'
+
+      it 'should update the heartbeat', ->
+        expect(@oldHeartbeat).to.not.equal @sut._heartbeat
 
     context 'when called with a timed out request', ->
       beforeEach (done) ->
@@ -259,3 +264,22 @@ describe 'JobManagerRequester', ->
 
       it 'should have an error', ->
         expect(@error).to.exist
+
+  describe 'healthcheck', ->
+    context 'when heartbeat is < 2 * jobTimeoutSeconds', ->
+      beforeEach (done) ->
+        @sut._heartbeat = moment()
+        @sut.healthcheck (error, @healthy) =>
+          done error
+
+      it 'should be healthy', ->
+        expect(@healthy).to.be.true
+
+    context 'when heartbeat is > 2 * jobTimeoutSeconds', ->
+      beforeEach (done) ->
+        @sut._heartbeat = moment().subtract(60, 'seconds')
+        @sut.healthcheck (error, @healthy) =>
+          done error
+
+      it 'should not be healthy', ->
+        expect(@healthy).to.be.false

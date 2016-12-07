@@ -126,8 +126,7 @@ class JobManagerRequester extends JobManagerBase
       , @jobTimeoutSeconds * 1000
 
   _emitResponses: (callback) =>
-    @_queuePool.acquire (error, queueClient) =>
-      return callback error if error?
+    @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
         @_queuePool.release queueClient
         console.error error.stack if error? # log error and continue
@@ -142,6 +141,8 @@ class JobManagerRequester extends JobManagerBase
 
           @emit "response:#{responseId}", response
           callback()
+    .catch callback
+    return # nothing
 
   _getResponse: (key, callback) =>
     @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
@@ -167,12 +168,14 @@ class JobManagerRequester extends JobManagerBase
     UUID.v4()
 
   start: (callback) =>
-    @_commandPool.acquire (error, @client) =>
-      return callback error if error?
+    @_commandPool.acquire().then (@client) =>
       @client.once 'error', (error) =>
         @emit 'error', error
 
       @_startProcessing callback
+
+    .catch callback
+    return # nothing
 
   _startProcessing: (callback) =>
     @_allowProcessing = true
@@ -191,7 +194,13 @@ class JobManagerRequester extends JobManagerBase
 
   stop: (callback) =>
     @_stopProcessing (error) =>
-      @_commandPool.release @client # always release
-      callback error
+      @_commandPool.release @client
+        .then =>
+          return @_commandPool.drain()
+        .then =>
+          return @_queuePool.drain()
+        .then =>
+          callback error
+    return # nothing
 
 module.exports = JobManagerRequester

@@ -1,5 +1,6 @@
 _                = require 'lodash'
-{ Pool }         = require '@octoblu/generic-pool'
+When             = require 'when'
+GenericPool      = require 'generic-pool'
 { EventEmitter } = require 'events'
 Redis            = require 'ioredis'
 RedisNS          = require '@octoblu/redis-ns'
@@ -13,8 +14,12 @@ class JobManagerBase extends EventEmitter
       @idleTimeoutMillis
       @maxConnections
       @minConnections
+      @evictionRunIntervalMillis
+      @acquireTimeoutMillis
     } = options
     @idleTimeoutMillis ?= 60000
+    @evictionRunIntervalMillis ?= 60000
+    @acquireTimeoutMillis ?= 5000
     @minConnections ?= 0
 
     throw new Error 'JobManagerResponder constructor is missing "namespace"' unless @namespace?
@@ -45,26 +50,46 @@ class JobManagerBase extends EventEmitter
       client.end true
     catch
 
-  _createRedisPool: ({ maxConnections, minConnections, idleTimeoutMillis, namespace, redisUri }) =>
-    return new Pool
+  _createRedisPool: ({ maxConnections, minConnections, idleTimeoutMillis, evictionRunIntervalMillis, acquireTimeoutMillis, namespace, redisUri }) =>
+    factory =
+      create: =>
+        return When.promise (resolve, reject) =>
+          conx = new Redis redisUri, dropBufferSupport: true
+          client = new RedisNS namespace, conx
+          rejectError = (error) =>
+            return reject error
+
+          client.once 'error', rejectError
+          client.once 'ready', =>
+            client.removeListener 'error', rejectError
+            resolve client
+
+      destroy: (client) =>
+        return When.promise (resolve, reject) =>
+          @_closeClient client, (error) =>
+            return reject error if error?
+            resolve()
+
+      validate: (client) =>
+        return When.promise (resolve) =>
+          client.ping (error) =>
+            return resolve false if error?
+            resolve true
+
+    options = {
       max: maxConnections
       min: minConnections
-      idleTimeoutMillis: idleTimeoutMillis
-      create: (callback) =>
-        conx = new Redis redisUri, dropBufferSupport: true
-        client = new RedisNS namespace, conx
-        client.ping (error) =>
-          return callback error if error?
-          client.once 'error', (error) =>
-            @_closeClient client
+      testOnBorrow: true
+      idleTimeoutMillis
+      evictionRunIntervalMillis
+      acquireTimeoutMillis
+    }
 
-          callback null, client
+    pool = GenericPool.createPool factory, options
 
-      destroy: @_closeClient
+    pool.on 'factoryCreateError', (error) =>
+      @emit 'factoryCreateError', error
 
-      validateAsync: (client, callback) =>
-        client.ping (error) =>
-          return callback false if error?
-          callback true
+    return pool
 
 module.exports = JobManagerBase

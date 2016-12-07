@@ -76,8 +76,7 @@ class JobManagerResponder extends JobManagerBase
         @createResponse response, callback
 
   getRequest: (callback) =>
-    @_queuePool.acquire (error, queueClient) =>
-      return callback error if error?
+    @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
         @_queuePool.release queueClient
         return callback error if error?
@@ -103,17 +102,26 @@ class JobManagerResponder extends JobManagerBase
             @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
               return callback error if error?
               callback null, request
+    .catch callback
     return # avoid returning pool
 
   start: (callback) =>
-    @_commandPool.acquire (error, @client) =>
-      return callback error if error?
+    @_commandPool.acquire().then (@client) =>
       @client.once 'error', (error) =>
         @emit 'error', error
       callback()
+    .catch callback
+    return # nothing
 
   stop: (callback) =>
     @_commandPool.release @client
-    _.defer callback
+    .then =>
+      return @_commandPool.drain()
+    .then =>
+      return @_queuePool.drain()
+    .then =>
+      callback()
+    .catch callback
+    return # nothing
 
 module.exports = JobManagerResponder

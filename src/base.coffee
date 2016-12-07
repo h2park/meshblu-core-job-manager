@@ -99,7 +99,7 @@ class JobManagerBase extends EventEmitter
     return pool
 
   healthcheck: (callback) =>
-    healthy = @_heartbeat.isAfter moment().subtract @jobTimeoutSeconds * 2, 'milliseconds'
+    healthy = @_heartbeat.isAfter moment().subtract @jobTimeoutSeconds * 2, 'seconds'
     _.defer =>
       callback null, healthy
 

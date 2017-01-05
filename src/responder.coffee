@@ -24,6 +24,7 @@ class JobManagerResponder extends JobManagerBase
 
       [ requestMetadata, responseQueueName ] = result ? []
 
+      return callback() if _.isEmpty(requestMetadata) and _.isEmpty(responseQueueName)
       return callback new Error 'missing responseQueueName' unless responseQueueName?
 
       try

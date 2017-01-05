@@ -1,6 +1,5 @@
 _                = require 'lodash'
 async            = require 'async'
-debug            = require('debug')('meshblu-core-job-manager:job-manager')
 UUID             = require 'uuid'
 JobManagerBase   = require './base'
 
@@ -101,6 +100,7 @@ class JobManagerRequester extends JobManagerBase
     callback = _.once callback
     request = @_addResponseIdToOptions request
     responseId = _.get request, 'metadata.responseId'
+    responseTimeout = null
     return callback new Error 'do requires metadata.responseId' unless responseId?
 
     @once "response:#{responseId}", (response) =>

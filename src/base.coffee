@@ -38,7 +38,7 @@ class JobManagerBase extends EventEmitter
     @_commandPool = @_createRedisPool { @maxConnections, @minConnections, @idleTimeoutMillis, @namespace, @redisUri }
 
   addMetric: (metadata, metricName, callback) =>
-    return callback() unless _.isArray metadata.jobLogs
+    return callback() if _.isEmpty metadata.jobLogs
     metadata.metrics ?= {}
     metadata.metrics[metricName] = Date.now()
     callback()

@@ -51,17 +51,8 @@ class JobManagerRequester extends JobManagerBase
       if Math.random() < @jobLogSampleRate
         metadata.jobLogs.push 'sampled'
 
-      unless _.isEmpty @jobLogSampleRateOverrideUuids
-        uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid, metadata.auth?.as ]
-        matches = _.intersection @jobLogSampleRateOverrideUuids, uuids
-        unless _.isEmpty matches
-          metadata.jobLogs.push 'override'
-
-      if _.isEmpty metadata.jobLogs
-        delete metadata.jobLogs
-
-      if _.isArray metadata.jobLogs
-        metadata.metrics = {}
+      uuids = [ metadata.auth?.uuid, metadata.toUuid, metadata.fromUuid, metadata.auth?.as ]
+      metadata.jobLogs.push 'override' unless _.isEmpty _.intersection @jobLogSampleRateOverrideUuids, uuids
 
       @addMetric metadata, 'enqueueRequestAt', (error) =>
         return callback error if error?

@@ -1,7 +1,5 @@
 _              = require 'lodash'
 async          = require 'async'
-moment         = require 'moment'
-debug          = require('debug')('meshblu-core-job-manager:job-manager')
 JobManagerBase = require './base'
 
 class JobManagerResponder extends JobManagerBase

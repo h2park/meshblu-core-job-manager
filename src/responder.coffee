@@ -1,14 +1,17 @@
 _              = require 'lodash'
 async          = require 'async'
 JobManagerBase = require './base'
+JobManagerResponderWorker = require './responder-worker'
 
 class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
     {
       @requestQueueName
+      concurrency=1
     } = options
 
     throw new Error 'JobManagerResponder constructor is missing "requestQueueName"' unless @requestQueueName?
+    @worker = new JobManagerResponderWorker {concurrency}
 
     super
 
@@ -64,12 +67,25 @@ class JobManagerResponder extends JobManagerBase
     return # avoid returning redis
 
   do: (next, callback=_.noop) =>
+    return @_doNow next, callback if @worker.isEmpty()
+    @worker.once 'empty', => @_doNow next, callback
+
+  _doNow: (next, callback) =>
     async.retry @getRequest, (error, result) =>
       return callback() if error?
       return callback() if _.isEmpty result
-      next result, (error, response) =>
-        return callback error if error?
-        @createResponse response, callback
+
+      task =
+        do: (cb) =>
+          next result, (error, response) =>
+            if error?
+              cb()
+              return callback error
+            @createResponse response, (error, response) =>
+              cb()
+              callback error, response
+
+      @worker.push task, =>
 
   getRequest: (callback) =>
     @_queuePool.acquire().then (queueClient) =>

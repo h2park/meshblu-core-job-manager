@@ -83,13 +83,14 @@ class JobManagerResponder extends JobManagerBase
       @queue.push job, callback
 
   _work: (job, callback) =>
-    @workerFunc job, (error, response) =>
-      if error?
-        console.error error.stack
-        callback()
-      @createResponse response, (error) =>
-        console.error error.stack if error?
-        callback()
+    process.nextTick =>
+      @workerFunc job, (error, response) =>
+        if error?
+          console.error error.stack
+          callback()
+        @createResponse response, (error) =>
+          console.error error.stack if error?
+          callback()
 
   getRequest: (callback) =>
     return callback() unless @_allowProcessing

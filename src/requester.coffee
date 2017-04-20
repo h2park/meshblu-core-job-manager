@@ -125,7 +125,7 @@ class JobManagerRequester extends JobManagerBase
         [ channel, key ] = result
         @_getResponse key, (error, response) =>
           console.error error.stack if error? # log error and continue
-          return callback() if _.isEmpty response
+          return if _.isEmpty response
           responseId = _.get response, 'metadata.responseId'
 
           @emit "response:#{responseId}", response

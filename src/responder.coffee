@@ -1,22 +1,26 @@
 _              = require 'lodash'
 async          = require 'async'
 JobManagerBase = require './base'
-JobManagerResponderWorker = require './responder-worker'
 
 class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
     {
       @requestQueueName
+      @workerFunc
       concurrency=1
     } = options
 
     throw new Error 'JobManagerResponder constructor is missing "requestQueueName"' unless @requestQueueName?
-    @worker = new JobManagerResponderWorker {concurrency}
+    throw new Error 'JobManagerResponder constructor is missing "workerFunc"' unless @workerFunc?
+
+    {concurrency=1} = options
+    @queue = async.queue @_work, concurrency
+    @queue.empty = => @emit 'empty'
 
     super
 
   createResponse: (options, callback) =>
-    { metadata, data, rawData } =options
+    { metadata, data, rawData } = options
     { responseId } = metadata
     data ?= null
     rawData ?= JSON.stringify data
@@ -66,28 +70,29 @@ class JobManagerResponder extends JobManagerBase
 
     return # avoid returning redis
 
-  do: (next, callback=_.noop) =>
-    return @_doNow next, callback if @worker.isEmpty()
-    @worker.once 'empty', => @_doNow next, callback
+  enqueueJob: (callback=_.noop) =>
+    return callback() unless @_allowProcessing
 
-  _doNow: (next, callback) =>
-    async.retry @getRequest, (error, result) =>
+    @_enqueuing = true
+    async.retry @getRequest, (error, job) =>
+      # order is important here
+      @_drained = false
+      @_enqueuing = true
       return callback() if error?
-      return callback() if _.isEmpty result
+      return callback() if _.isEmpty job
+      @queue.push job, callback
 
-      task =
-        do: (cb) =>
-          next result, (error, response) =>
-            if error?
-              cb()
-              return callback error
-            @createResponse response, (error, response) =>
-              cb()
-              callback error, response
-
-      @worker.push task, =>
+  _work: (job, callback) =>
+    @workerFunc job, (error, response) =>
+      if error?
+        console.error error.stack
+        callback()
+      @createResponse response, (error) =>
+        console.error error.stack if error?
+        callback()
 
   getRequest: (callback) =>
+    return callback() unless @_allowProcessing
     @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
         @_updateHeartbeat()
@@ -122,19 +127,33 @@ class JobManagerResponder extends JobManagerBase
     @_commandPool.acquire().then (@client) =>
       @client.once 'error', (error) =>
         @emit 'error', error
-      callback()
+
+      @_startProcessing callback
     .catch callback
-    return # nothing
+    return # promises
+
+  _startProcessing: (callback) =>
+    @_allowProcessing = true
+    @_stoppedProcessing = false
+    @_drained = true
+    @_enqueuing = false
+    @queue.empty = @enqueueJob
+    @queue.drain = =>
+      @_drained = true
+    @enqueueJob()
+    _.defer callback
+
+  _waitForStopped: (callback) =>
+    _.delay callback, 100
+
+  _safeToStop: =>
+     @_allowProcessing == false && @_drained && @_enqueuing == false
+
+  _stopProcessing: (callback) =>
+    @_allowProcessing = false
+    async.doWhilst @_waitForStopped, @_safeToStop, callback
 
   stop: (callback) =>
-    @_commandPool.release @client
-    .then =>
-      return @_commandPool.drain()
-    .then =>
-      return @_queuePool.drain()
-    .then =>
-      callback()
-    .catch callback
-    return # nothing
+    @_stopProcessing callback
 
 module.exports = JobManagerResponder

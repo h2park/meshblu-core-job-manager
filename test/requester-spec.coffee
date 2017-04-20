@@ -26,7 +26,7 @@ describe 'JobManagerRequester', ->
     @client.del @requestQueueName, @responseQueueName, 'some-response-id', done
     return # avoid returning redis
 
-  beforeEach (done) ->
+  beforeEach "create requester", (done) ->
     @sut = new JobManagerRequester {
       @namespace
       @redisUri
@@ -40,21 +40,6 @@ describe 'JobManagerRequester', ->
 
     @sut.start done
 
-  beforeEach (done) ->
-    @responder = new JobManagerResponder {
-      @namespace
-      @redisUri
-      @maxConnections
-      @jobTimeoutSeconds
-      @queueTimeoutSeconds
-      @jobLogSampleRate
-      @requestQueueName
-    }
-
-    @responder.start done
-
-  afterEach (done) ->
-    @responder.stop done
 
   afterEach (done) ->
     @sut.stop done
@@ -123,6 +108,7 @@ describe 'JobManagerRequester', ->
       it 'should place the job in a queue', (done) ->
         @client.brpop @requestQueueName, 1, (error, result) =>
           return done(error) if error?
+          return done(new Error('Invalid Result')) if _.isEmpty result
           [channel, responseKey] = result
           expect(responseKey).to.deep.equal 'some-response-id'
           done()
@@ -220,18 +206,33 @@ describe 'JobManagerRequester', ->
         return # avoid returning redis
 
   describe '->do', ->
+    beforeEach "create responder", (done) ->
+      @workerFunc = sinon.stub()
+      @responder = new JobManagerResponder {
+        @namespace
+        @redisUri
+        @maxConnections
+        @jobTimeoutSeconds
+        @queueTimeoutSeconds
+        @jobLogSampleRate
+        @requestQueueName
+        @workerFunc
+      }
+
+      @responder.start done
+
+    afterEach (done) ->
+      @responder.stop done
+
     context 'when called with a request', ->
       beforeEach ->
-        @responder.do (request, next) =>
-          { @responseId } = request.metadata
+        options =
+          metadata:
+            gross: true
+            responseId: 'some-response-id'
+          rawData: 'abcd123'
 
-          options =
-            metadata:
-              gross: true
-              responseId: @responseId
-            rawData: 'abcd123'
-
-          next null, options
+        @workerFunc.yields null, options
 
       beforeEach (done) ->
         options =
@@ -247,7 +248,7 @@ describe 'JobManagerRequester', ->
         expect(@response).to.containSubset
           metadata:
             gross: true
-            responseId: @responseId
+            responseId: 'some-response-id'
           rawData: 'abcd123'
 
       it 'should update the heartbeat', ->

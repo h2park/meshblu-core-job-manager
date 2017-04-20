@@ -40,9 +40,8 @@ describe 'JobManagerRequester', ->
 
     @sut.start done
 
-
-  afterEach (done) ->
-    @sut.stop done
+  afterEach ->
+    @sut.stop()
 
   describe '->createRequest', ->
     context 'when the maxQueueLength is exceeded', ->

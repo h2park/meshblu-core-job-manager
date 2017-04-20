@@ -131,7 +131,7 @@ class JobManagerResponder extends JobManagerBase
           return callback error if error?
           callback null, request
 
-  start: (callback) =>
+  start: (callback=_.noop) =>
     @_commandPool.acquire().then (@client) =>
       @client.once 'error', (error) =>
         @emit 'error', error
@@ -165,7 +165,7 @@ class JobManagerResponder extends JobManagerBase
     @_allowProcessing = false
     async.doWhilst @_waitForStopped, @_safeToStop, callback
 
-  stop: (callback) =>
+  stop: (callback=_.noop) =>
     @_stopProcessing callback
 
 module.exports = JobManagerResponder

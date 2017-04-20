@@ -155,7 +155,7 @@ class JobManagerRequester extends JobManagerBase
   generateResponseId: =>
     UUID.v4()
 
-  start: (callback) =>
+  start: (callback=_.noop) =>
     @_commandPool.acquire().then (@client) =>
       @client.once 'error', (error) =>
         @emit 'error', error
@@ -180,7 +180,7 @@ class JobManagerRequester extends JobManagerBase
   _waitForStopped: (callback) =>
     _.delay callback, 100
 
-  stop: (callback) =>
+  stop: (callback=_.noop) =>
     @_stopProcessing (error) =>
       @_commandPool.release @client
         .then =>

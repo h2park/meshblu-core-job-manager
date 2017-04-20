@@ -36,6 +36,7 @@ class JobManagerBase extends EventEmitter
 
     @_queuePool = @_createRedisPool { @maxConnections, @minConnections, @idleTimeoutMillis, @namespace, @redisUri }
     @_commandPool = @_createRedisPool { @maxConnections, @minConnections, @idleTimeoutMillis, @namespace, @redisUri }
+    @_pubSubPool = @_createRedisPool { @maxConnections, @minConnections, @idleTimeoutMillis, @namespace, @redisUri }
 
   addMetric: (metadata, metricName, callback) =>
     return callback() if _.isEmpty metadata.jobLogs

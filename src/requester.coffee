@@ -112,6 +112,23 @@ class JobManagerRequester extends JobManagerBase
         @emit "error:#{responseId}", error
       , @jobTimeoutSeconds * 1000
 
+  _listenForResponses: (callback) =>
+    @pubSubClient.subscribe @responseQueueName
+    @pubSubClient.on 'message', (channel, data) =>
+      @_updateHeartbeat()
+      try
+        data = JSON.parse data
+      catch error
+
+      { metadata, rawData } = data
+
+      @_parseResponse { metadata, rawData }, (error, response) =>
+        console.error error.stack if error? # log error and continue
+        return if _.isEmpty response
+        responseId = _.get response, 'metadata.responseId'
+
+        @emit "response:#{responseId}", response
+
   _emitResponses: (callback) =>
     return _.defer callback unless @_allowProcessing
     @_queuePool.acquire().then (queueClient) =>
@@ -120,7 +137,7 @@ class JobManagerRequester extends JobManagerBase
         @_queuePool.release queueClient
         console.error error.stack if error? # log error and continue
         return callback() if _.isEmpty result
-        callback() # callback early to allow brpop to keep going
+        return callback() # callback early to allow brpop to keep going
 
         [ channel, key ] = result
         @_getResponse key, (error, response) =>
@@ -136,38 +153,45 @@ class JobManagerRequester extends JobManagerBase
     @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>
       delete error.code if error?
       return callback error if error?
-
       [ metadata, rawData ] = data
-      return if _.isEmpty metadata
-
       metadata = JSON.parse metadata
+      @_parseResponse { metadata, rawData }, callback
+    return # promises
 
-      @addMetric metadata, 'dequeueResponseAt', (error) =>
-        return callback error if error?
+  _parseResponse: ({ metadata, rawData }, callback) =>
+    return if _.isEmpty metadata
 
-        response =
-          metadata: metadata
-          rawData: rawData
+    @addMetric metadata, 'dequeueResponseAt', (error) =>
+      return callback error if error?
 
-        callback null, response
-    return # avoid returning redis
+      response =
+        metadata: metadata
+        rawData: rawData
+
+      callback null, response
 
   generateResponseId: =>
     UUID.v4()
 
   start: (callback=_.noop) =>
-    @_commandPool.acquire().then (@client) =>
+    @_commandPool.acquire()
+    .then (@client) =>
       @client.once 'error', (error) =>
         @emit 'error', error
 
+      @_pubSubPool.acquire()
+    .then (@pubSubClient) =>
       @_startProcessing callback
-
     .catch callback
     return # nothing
 
   _startProcessing: (callback) =>
+    callback = _.once callback
     @_allowProcessing = true
     @_stoppedProcessing = false
+
+    @_listenForResponses()
+
     async.doWhilst @_emitResponses, (=> @_allowProcessing), (error) =>
       @emit 'error', error if error?
       @_stoppedProcessing = true
@@ -175,6 +199,7 @@ class JobManagerRequester extends JobManagerBase
 
   _stopProcessing: (callback) =>
     @_allowProcessing = false
+    @pubSubClient.unsubscribe @responseQueueName
     async.doWhilst @_waitForStopped, (=> @_stoppedProcessing), callback
 
   _waitForStopped: (callback) =>
@@ -182,13 +207,18 @@ class JobManagerRequester extends JobManagerBase
 
   stop: (callback=_.noop) =>
     @_stopProcessing (error) =>
-      @_commandPool.release @client
-        .then =>
-          return @_commandPool.drain()
-        .then =>
-          return @_queuePool.drain()
-        .then =>
-          callback error
+      @_pubSubPool.release @pubSubClient
+      .then =>
+        @_commandPool.release @client
+      .then =>
+        return @_pubSubPool.drain()
+      .then =>
+        return @_commandPool.drain()
+      .then =>
+        return @_queuePool.drain()
+      .then =>
+        callback error
+      .catch callback
     return # nothing
 
 module.exports = JobManagerRequester

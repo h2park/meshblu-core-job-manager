@@ -138,7 +138,7 @@ class JobManagerRequester extends JobManagerBase
       return callback error if error?
 
       [ metadata, rawData ] = data
-      return callback new Error 'Malformed response, missing metadata' if _.isEmpty metadata
+      return if _.isEmpty metadata
 
       metadata = JSON.parse metadata
 

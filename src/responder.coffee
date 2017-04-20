@@ -53,17 +53,8 @@ class JobManagerResponder extends JobManagerBase
       @addMetric metadata, 'enqueueResponseAt', (error) =>
         return callback error if error?
 
-        metadataStr = JSON.stringify metadata
-
-        values = [
-          'response:metadata', metadataStr
-          'response:data', rawData
-        ]
-
         async.series [
           async.apply @client.publish, responseQueueName, JSON.stringify({ metadata, rawData })
-          async.apply @client.hmset, responseId, values
-          async.apply @client.lpush, responseQueueName, responseId
           async.apply @client.expire, responseId, @jobTimeoutSeconds
         ], (error) =>
           delete error.code if error?

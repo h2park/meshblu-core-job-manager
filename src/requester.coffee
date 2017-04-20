@@ -188,22 +188,14 @@ class JobManagerRequester extends JobManagerBase
   _startProcessing: (callback) =>
     callback = _.once callback
     @_allowProcessing = true
-    @_stoppedProcessing = false
 
     @_listenForResponses()
-
-    async.doWhilst @_emitResponses, (=> @_allowProcessing), (error) =>
-      @emit 'error', error if error?
-      @_stoppedProcessing = true
     _.defer callback
 
   _stopProcessing: (callback) =>
     @_allowProcessing = false
     @pubSubClient.unsubscribe @responseQueueName
-    async.doWhilst @_waitForStopped, (=> @_stoppedProcessing), callback
-
-  _waitForStopped: (callback) =>
-    _.delay callback, 100
+    callback()
 
   stop: (callback=_.noop) =>
     @_stopProcessing (error) =>

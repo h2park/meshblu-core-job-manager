@@ -113,13 +113,14 @@ class JobManagerRequester extends JobManagerBase
       , @jobTimeoutSeconds * 1000
 
   _emitResponses: (callback) =>
+    return _.defer callback unless @_allowProcessing
     @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @responseQueueName, @queueTimeoutSeconds, (error, result) =>
         @_updateHeartbeat()
         @_queuePool.release queueClient
         console.error error.stack if error? # log error and continue
         return callback() if _.isEmpty result
-        return callback() unless @_allowProcessing
+        callback() # callback early to allow brpop to keep going
 
         [ channel, key ] = result
         @_getResponse key, (error, response) =>
@@ -128,7 +129,6 @@ class JobManagerRequester extends JobManagerBase
           responseId = _.get response, 'metadata.responseId'
 
           @emit "response:#{responseId}", response
-          callback()
     .catch callback
     return # nothing
 

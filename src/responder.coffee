@@ -70,30 +70,35 @@ class JobManagerResponder extends JobManagerBase
 
     return # avoid returning redis
 
+  enqueueJobs: =>
+    async.doWhilst @enqueueJob, (=> @_allowProcessing)
+
   enqueueJob: (callback=_.noop) =>
-    return callback() unless @_allowProcessing
+    return _.defer callback unless @_allowEnqueueing
 
     @_enqueuing = true
-    async.retry @getRequest, (error, job) =>
+    @dequeueJob (error, key) =>
       # order is important here
       @_drained = false
       @_enqueuing = true
       return callback() if error?
-      return callback() if _.isEmpty job
-      @queue.push job, callback
+      return callback() if _.isEmpty key
+      @queue.push key
+      callback()
 
-  _work: (job, callback) =>
-    process.nextTick =>
-      @workerFunc job, (error, response) =>
-        if error?
-          console.error error.stack
-          callback()
-        @createResponse response, (error) =>
-          console.error error.stack if error?
-          callback()
+  _work: (key, callback) =>
+    @getRequest key, (error, job) =>
+      return callback error if error?
+      process.nextTick =>
+        @workerFunc job, (error, response) =>
+          if error?
+            console.error error.stack
+            callback()
+          @createResponse response, (error) =>
+            console.error error.stack if error?
+            callback()
 
-  getRequest: (callback) =>
-    return callback() unless @_allowProcessing
+  dequeueJob: (callback) =>
     @_queuePool.acquire().then (queueClient) =>
       queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
         @_updateHeartbeat()
@@ -102,27 +107,29 @@ class JobManagerResponder extends JobManagerBase
         return callback new Error 'No Result' unless result?
 
         [ channel, key ] = result
-
-        @client.hgetall key, (error, result) =>
-          delete error.code if error?
-          return callback error if error?
-          return callback new Error 'Missing result' if _.isEmpty result
-          return callback new Error 'Missing metadata' if _.isEmpty result['request:metadata']
-
-          metadata = JSON.parse result['request:metadata']
-          @addMetric metadata, 'dequeueRequestAt', (error) =>
-            return callback error if error?
-
-            request =
-              createdAt: result['request:createdAt']
-              metadata:  metadata
-              rawData:   result['request:data']
-
-            @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
-              return callback error if error?
-              callback null, request
+        return callback null, key
     .catch callback
-    return # avoid returning pool
+    return
+
+  getRequest: (key, callback) =>
+    @client.hgetall key, (error, result) =>
+      delete error.code if error?
+      return callback error if error?
+      return callback new Error 'Missing result' if _.isEmpty result
+      return callback new Error 'Missing metadata' if _.isEmpty result['request:metadata']
+
+      metadata = JSON.parse result['request:metadata']
+      @addMetric metadata, 'dequeueRequestAt', (error) =>
+        return callback error if error?
+
+        request =
+          createdAt: result['request:createdAt']
+          metadata:  metadata
+          rawData:   result['request:data']
+
+        @client.hset key, 'request:metadata', JSON.stringify(metadata), (error) =>
+          return callback error if error?
+          callback null, request
 
   start: (callback) =>
     @_commandPool.acquire().then (@client) =>
@@ -138,10 +145,14 @@ class JobManagerResponder extends JobManagerBase
     @_stoppedProcessing = false
     @_drained = true
     @_enqueuing = false
-    @queue.empty = @enqueueJob
+    @_allowEnqueueing = true
+    @queue.unsaturated = =>
+      @_allowEnqueueing = true
+    @queue.saturated = =>
+      @_allowEnqueueing = false
     @queue.drain = =>
       @_drained = true
-    @enqueueJob()
+    @enqueueJobs()
     _.defer callback
 
   _waitForStopped: (callback) =>

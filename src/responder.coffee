@@ -61,9 +61,9 @@ class JobManagerResponder extends JobManagerBase
         ]
 
         async.series [
+          async.apply @client.publish, responseQueueName, JSON.stringify({ metadata, rawData })
           async.apply @client.hmset, responseId, values
           async.apply @client.lpush, responseQueueName, responseId
-          async.apply @client.publish, responseQueueName, JSON.stringify({ metadata, rawData })
           async.apply @client.expire, responseId, @jobTimeoutSeconds
         ], (error) =>
           delete error.code if error?

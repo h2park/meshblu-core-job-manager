@@ -19,13 +19,13 @@ class JobManagerResponder extends JobManagerBase
 
     super
 
-  createResponse: (options, callback) =>
-    { metadata, data, rawData } = options
-    { responseId } = metadata
+  createResponse: ({responseId, response}, callback) =>
+    { metadata, data, rawData } = response
+    metadata.responseId ?= responseId
     data ?= null
     rawData ?= JSON.stringify data
 
-    @client.hmget responseId, ['request:metadata', 'response:queueName'], (error, result) =>
+    @client.hmget metadata.responseId, ['request:metadata', 'response:queueName'], (error, result) =>
       delete error.code if error?
       return callback error if error?
 
@@ -41,7 +41,7 @@ class JobManagerResponder extends JobManagerBase
       requestMetadata ?= {}
 
       if requestMetadata.ignoreResponse
-        @client.del responseId, (error) =>
+        @client.del metadata.responseId, (error) =>
           delete error.code if error?
           return callback error if error?
           return callback null, {metadata, rawData}
@@ -55,7 +55,7 @@ class JobManagerResponder extends JobManagerBase
 
         async.series [
           async.apply @client.publish, responseQueueName, JSON.stringify({ metadata, rawData })
-          async.apply @client.expire, responseId, @jobTimeoutSeconds
+          async.apply @client.expire, metadata.responseId, @jobTimeoutSeconds
         ], (error) =>
           delete error.code if error?
           callback null, { metadata, rawData }
@@ -86,7 +86,8 @@ class JobManagerResponder extends JobManagerBase
           if error?
             console.error error.stack
             callback()
-          @createResponse response, (error) =>
+          responseId = _.get job, 'metadata.responseId'
+          @createResponse {responseId, response}, (error) =>
             console.error error.stack if error?
             callback()
 

@@ -2,6 +2,7 @@ _              = require 'lodash'
 async          = require 'async'
 JobManagerBase = require './base'
 debug          = require('debug')('meshblu-core-job-manager:responder')
+debugSaturation = require('debug')('meshblu-core-job-manager:responder:saturation')
 SimpleBenchmark = require 'simple-benchmark'
 
 class JobManagerResponder extends JobManagerBase
@@ -70,8 +71,11 @@ class JobManagerResponder extends JobManagerBase
   enqueueJob: (callback=_.noop) =>
     return _.defer callback if @queue.length() > @queue.concurrency
 
+    benchmark = new SimpleBenchmark label: 'enqueueJob'
     @_enqueuing = true
     @dequeueJob (error, key) =>
+      debugSaturation "ql:", @queue.length(), "wl:", @queue.workersList().length
+      debug benchmark.toString()
       # order is important here
       @_enqueuing = false
       return callback() if error?
@@ -81,6 +85,7 @@ class JobManagerResponder extends JobManagerBase
       callback()
 
   _work: (key, callback) =>
+    benchmark = new SimpleBenchmark label: '_work'
     @getRequest key, (error, job) =>
       return callback error if error?
       process.nextTick =>
@@ -91,6 +96,7 @@ class JobManagerResponder extends JobManagerBase
           responseId = _.get job, 'metadata.responseId'
           @createResponse {responseId, response}, (error) =>
             console.error error.stack if error?
+            debug benchmark.toString()
             callback()
 
   dequeueJob: (callback) =>

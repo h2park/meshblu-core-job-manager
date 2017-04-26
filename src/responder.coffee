@@ -67,6 +67,7 @@ class JobManagerResponder extends JobManagerBase
 
   enqueueJobs: =>
     async.doWhilst @enqueueJob, (=> @_allowProcessing)
+    async.doWhilst @enqueueAnotherJob, (=> @_allowProcessing)
 
   enqueueJob: (callback=_.noop) =>
     return _.defer callback if @queue.length() > @queue.concurrency
@@ -81,6 +82,22 @@ class JobManagerResponder extends JobManagerBase
       return callback() if error?
       return callback() if _.isEmpty key
       @_drained = false
+      @queue.push key
+      callback()
+
+  enqueueAnotherJob: (callback=_.noop) =>
+    return _.defer callback if @queue.length() > @queue.concurrency
+
+    benchmark = new SimpleBenchmark label: 'enqueueJob'
+    @_enqueuingAnother = true
+    @dequeueJob (error, key) =>
+      debugSaturation "ql:", @queue.length(), "wl:", @queue.workersList().length
+      debug benchmark.toString()
+      # order is important here
+      @_enqueuingAnother = false
+      return callback() if error?
+      return callback() if _.isEmpty key
+      @_drainedAnother = false
       @queue.push key
       callback()
 
@@ -149,10 +166,13 @@ class JobManagerResponder extends JobManagerBase
     @_allowProcessing = true
     @_stoppedProcessing = false
     @_drained = true
+    @_drainedAnother = true
     @_enqueuing = false
+    @_enqueuingAnother = false
     @queue.drain = =>
       debug 'drained'
       @_drained = true
+      @_drainedAnother = true
     @enqueueJobs()
     _.defer callback
 
@@ -160,7 +180,7 @@ class JobManagerResponder extends JobManagerBase
     _.delay callback, 100
 
   _safeToStop: =>
-    @_allowProcessing == false && @_drained && @_enqueuing == false
+    @_allowProcessing == false && @_drained && @_enqueuing == false && @_drainedAnother && @_enqueuingAnother == false
 
   _stopProcessing: (callback) =>
     @_allowProcessing = false

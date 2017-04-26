@@ -1,6 +1,7 @@
 _              = require 'lodash'
 async          = require 'async'
 JobManagerBase = require './base'
+debug          = require('debug')('meshblu-core-job-manager:responder')
 
 class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
@@ -66,13 +67,13 @@ class JobManagerResponder extends JobManagerBase
     async.doWhilst @enqueueJob, (=> @_allowProcessing)
 
   enqueueJob: (callback=_.noop) =>
-    return _.defer callback unless @_allowEnqueueing
+    return _.defer callback if @queue.length() > @queue.concurrency
 
     @_enqueuing = true
     @dequeueJob (error, key) =>
       # order is important here
       @_drained = false
-      @_enqueuing = true
+      @_enqueuing = false
       return callback() if error?
       return callback() if _.isEmpty key
       @queue.push key
@@ -138,12 +139,8 @@ class JobManagerResponder extends JobManagerBase
     @_stoppedProcessing = false
     @_drained = true
     @_enqueuing = false
-    @_allowEnqueueing = true
-    @queue.unsaturated = =>
-      @_allowEnqueueing = true
-    @queue.saturated = =>
-      @_allowEnqueueing = false
     @queue.drain = =>
+      debug 'drained'
       @_drained = true
     @enqueueJobs()
     _.defer callback
@@ -152,11 +149,11 @@ class JobManagerResponder extends JobManagerBase
     _.delay callback, 100
 
   _safeToStop: =>
-     @_allowProcessing == false && @_drained && @_enqueuing == false
+    @_allowProcessing == false && @_drained && @_enqueuing == false
 
   _stopProcessing: (callback) =>
     @_allowProcessing = false
-    async.doWhilst @_waitForStopped, @_safeToStop, callback
+    async.doUntil @_waitForStopped, @_safeToStop, callback
 
   stop: (callback=_.noop) =>
     @_stopProcessing callback

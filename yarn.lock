@@ -64,13 +64,7 @@ async@^1.4.0:
   version "1.5.2"
   resolved "https://registry.yarnpkg.com/async/-/async-1.5.2.tgz#ec6a61ae56480c0c3cb241c95618e20892f9672a"
 
-async@^2.0.0-rc.5:
-  version "2.1.4"
-  resolved "https://registry.yarnpkg.com/async/-/async-2.1.4.tgz#2d2160c7788032e4dd6cbe2502f1f9a2c8f6cde4"
-  dependencies:
-    lodash "^4.14.0"
-
-async@^2.3.0:
+async@^2.0.0-rc.5, async@^2.3.0:
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/async/-/async-2.3.0.tgz#1013d1051047dd320fe24e494d5c66ecaf6147d9"
   dependencies:
@@ -254,13 +248,13 @@ code-point-at@^1.0.0:
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/code-point-at/-/code-point-at-1.1.0.tgz#0d070b4d043a5bea33a2f1a40e2edb3d9a4ccf77"
 
-coffee-script@^1.10.0:
-  version "1.12.2"
-  resolved "https://registry.yarnpkg.com/coffee-script/-/coffee-script-1.12.2.tgz#0d4cbdee183f650da95419570c4929d08ef91376"
-
-coffee-script@^1.12.5:
+coffee-script@^1.10.0, coffee-script@^1.12.5:
   version "1.12.5"
   resolved "https://registry.yarnpkg.com/coffee-script/-/coffee-script-1.12.5.tgz#809f4585419112bbfe46a073ad7543af18c27346"
+
+colors@^1.1.2:
+  version "1.1.2"
+  resolved "https://registry.yarnpkg.com/colors/-/colors-1.1.2.tgz#168a4701756b6a7f51a12ce0c97bfa28c084ed63"
 
 commander@2.9.0:
   version "2.9.0"
@@ -295,13 +289,13 @@ debug-log@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/debug-log/-/debug-log-1.0.1.tgz#2307632d4c04382b8df8a32f70b895046d52745f"
 
-debug@2.2.0, debug@^2.2.0:
+debug@2.2.0:
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/debug/-/debug-2.2.0.tgz#f87057e995b1a1f6ae6a4960664137bc56f039da"
   dependencies:
     ms "0.7.1"
 
-debug@^2.6.4:
+debug@^2.2.0, debug@^2.6.4:
   version "2.6.4"
   resolved "https://registry.yarnpkg.com/debug/-/debug-2.6.4.tgz#7586a9b3c39741c0282ae33445c4e8ac74734fe0"
   dependencies:
@@ -905,11 +899,7 @@ mocha@^3.1.2:
     mkdirp "0.5.1"
     supports-color "3.1.2"
 
-moment@^2.11.1:
-  version "2.17.1"
-  resolved "https://registry.yarnpkg.com/moment/-/moment-2.17.1.tgz#fed9506063f36b10f066c8b59a144d7faebe1d82"
-
-moment@^2.18.1:
+moment@^2.11.1, moment@^2.18.1:
   version "2.18.1"
   resolved "https://registry.yarnpkg.com/moment/-/moment-2.18.1.tgz#c36193dd3ce1c2eed2adb7c802dbbc77a81b1c0f"
 
@@ -1187,6 +1177,13 @@ signal-exit@^2.0.0:
 signal-exit@^3.0.0, signal-exit@^3.0.1:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/signal-exit/-/signal-exit-3.0.2.tgz#b5fdc08f1287ea1178628e415e25132b73646c6d"
+
+simple-benchmark@^1.0.11:
+  version "1.0.11"
+  resolved "https://registry.yarnpkg.com/simple-benchmark/-/simple-benchmark-1.0.11.tgz#f93f0a5322346d5cade1635a9d2d847446111545"
+  dependencies:
+    coffee-script "^1.10.0"
+    colors "^1.1.2"
 
 sinon-chai@^2.9.0:
   version "2.9.0"

@@ -2,6 +2,7 @@ _              = require 'lodash'
 async          = require 'async'
 JobManagerBase = require './base'
 debug          = require('debug')('meshblu-core-job-manager:responder')
+SimpleBenchmark = require 'simple-benchmark'
 
 class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
@@ -93,17 +94,13 @@ class JobManagerResponder extends JobManagerBase
             callback()
 
   dequeueJob: (callback) =>
-    @_queuePool.acquire().then (queueClient) =>
-      queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
-        @_updateHeartbeat()
-        @_queuePool.release queueClient
-        return callback error if error?
-        return callback new Error 'No Result' unless result?
+    @queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
+      @_updateHeartbeat()
+      return callback error if error?
+      return callback new Error 'No Result' unless result?
 
-        [ channel, key ] = result
-        return callback null, key
-    .catch callback
-    return
+      [ channel, key ] = result
+      return callback null, key
 
   getRequest: (key, callback) =>
     @client.hgetall key, (error, result) =>
@@ -126,13 +123,21 @@ class JobManagerResponder extends JobManagerBase
           callback null, request
 
   start: (callback=_.noop) =>
-    @_commandPool.acquire().then (@client) =>
-      @client.once 'error', (error) =>
-        @emit 'error', error
+    @_getNewQueueClient().then =>
+      @_commandPool.acquire()
+    .then (@client) =>
+        @client.once 'error', (error) =>
+          @emit 'error', error
 
-      @_startProcessing callback
+        @_startProcessing callback
     .catch callback
     return # promises
+
+  _getNewQueueClient: (error) =>
+    @_queuePool.release @queueClient if @queueClient?
+    @_queuePool.acquire().then (@queueClient) =>
+      console.error error.stack if error?
+      @queueClient.once 'error', @_getNewQueueClient
 
   _startProcessing: (callback) =>
     @_allowProcessing = true

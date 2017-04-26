@@ -253,18 +253,6 @@ describe 'JobManagerRequester', ->
       it 'should update the heartbeat', ->
         expect(@oldHeartbeat).to.not.equal @sut._heartbeat
 
-    context 'when called with a timed out request', ->
-      beforeEach (done) ->
-        options =
-          metadata:
-            duel: "i'm just in it for the glove slapping"
-            responseId: 'some-response-id'
-
-        @sut.do options, (@error) => done()
-
-      it 'should have an error', ->
-        expect(@error).to.exist
-
   describe 'healthcheck', ->
     context 'when heartbeat is < 2 * jobTimeoutSeconds', ->
       beforeEach (done) ->

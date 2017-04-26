@@ -72,10 +72,10 @@ class JobManagerResponder extends JobManagerBase
     @_enqueuing = true
     @dequeueJob (error, key) =>
       # order is important here
-      @_drained = false
       @_enqueuing = false
       return callback() if error?
       return callback() if _.isEmpty key
+      @_drained = false
       @queue.push key
       callback()
 

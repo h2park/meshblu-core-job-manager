@@ -1,9 +1,10 @@
-_              = require 'lodash'
-async          = require 'async'
-JobManagerBase = require './base'
-debug          = require('debug')('meshblu-core-job-manager:responder')
-debugSaturation = require('debug')('meshblu-core-job-manager:responder:saturation')
-SimpleBenchmark = require 'simple-benchmark'
+_                 = require 'lodash'
+async             = require 'async'
+JobManagerBase    = require './base'
+debug             = require('debug')('meshblu-core-job-manager:responder')
+debugSaturation   = require('debug')('meshblu-core-job-manager:responder:saturation')
+SimpleBenchmark   = require 'simple-benchmark'
+ResponderDequeuer = require './responder-dequeuer'
 
 class JobManagerResponder extends JobManagerBase
   constructor: (options={}) ->
@@ -19,8 +20,11 @@ class JobManagerResponder extends JobManagerBase
     {concurrency=1} = options
     @queue = async.queue @_work, concurrency
     @queue.empty = => @emit 'empty'
-
     super
+    @dequeuers = [
+      new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds }
+      new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds }
+    ]
 
   createResponse: ({responseId, response}, callback) =>
     { metadata, data, rawData } = response
@@ -65,42 +69,6 @@ class JobManagerResponder extends JobManagerBase
 
     return # avoid returning redis
 
-  enqueueJobs: =>
-    async.doWhilst @enqueueJob, (=> @_allowProcessing)
-    async.doWhilst @enqueueAnotherJob, (=> @_allowProcessing)
-
-  enqueueJob: (callback=_.noop) =>
-    return _.defer callback if @queue.length() > @queue.concurrency
-
-    benchmark = new SimpleBenchmark label: 'enqueueJob'
-    @_enqueuing = true
-    @dequeueJob (error, key) =>
-      debugSaturation "ql:", @queue.length(), "wl:", @queue.workersList().length
-      debug benchmark.toString()
-      # order is important here
-      @_enqueuing = false
-      return callback() if error?
-      return callback() if _.isEmpty key
-      @_drained = false
-      @queue.push key
-      callback()
-
-  enqueueAnotherJob: (callback=_.noop) =>
-    return _.defer callback if @queue.length() > @queue.concurrency
-
-    benchmark = new SimpleBenchmark label: 'enqueueJob'
-    @_enqueuingAnother = true
-    @dequeueJob (error, key) =>
-      debugSaturation "ql:", @queue.length(), "wl:", @queue.workersList().length
-      debug benchmark.toString()
-      # order is important here
-      @_enqueuingAnother = false
-      return callback() if error?
-      return callback() if _.isEmpty key
-      @_drainedAnother = false
-      @queue.push key
-      callback()
-
   _work: (key, callback) =>
     benchmark = new SimpleBenchmark label: '_work'
     @getRequest key, (error, job) =>
@@ -115,15 +83,6 @@ class JobManagerResponder extends JobManagerBase
             console.error error.stack if error?
             debug benchmark.toString()
             callback()
-
-  dequeueJob: (callback) =>
-    @queueClient.brpop @requestQueueName, @queueTimeoutSeconds, (error, result) =>
-      @_updateHeartbeat()
-      return callback error if error?
-      return callback new Error 'No Result' unless result?
-
-      [ channel, key ] = result
-      return callback null, key
 
   getRequest: (key, callback) =>
     @client.hgetall key, (error, result) =>
@@ -146,47 +105,32 @@ class JobManagerResponder extends JobManagerBase
           callback null, request
 
   start: (callback=_.noop) =>
-    @_getNewQueueClient().then =>
-      @_commandPool.acquire()
-    .then (@client) =>
-        @client.once 'error', (error) =>
-          @emit 'error', error
+    @_commandPool.acquire().then (@client) =>
+      @client.once 'error', (error) =>
+        @emit 'error', error
 
-        @_startProcessing callback
+      @_startProcessing callback
     .catch callback
     return # promises
 
-  _getNewQueueClient: (error) =>
-    @_queuePool.release @queueClient if @queueClient?
-    @_queuePool.acquire().then (@queueClient) =>
-      console.error error.stack if error?
-      @queueClient.once 'error', @_getNewQueueClient
-
   _startProcessing: (callback) =>
-    @_allowProcessing = true
-    @_stoppedProcessing = false
     @_drained = true
-    @_drainedAnother = true
-    @_enqueuing = false
-    @_enqueuingAnother = false
     @queue.drain = =>
       debug 'drained'
       @_drained = true
-      @_drainedAnother = true
-    @enqueueJobs()
-    _.defer callback
+    tasks = []
+    _.each @dequeuers, (dequeuer) =>
+      tasks.push dequeuer.start
+    async.parallel tasks, callback
 
   _waitForStopped: (callback) =>
     _.delay callback, 100
 
-  _safeToStop: =>
-    @_allowProcessing == false && @_drained && @_enqueuing == false && @_drainedAnother && @_enqueuingAnother == false
-
-  _stopProcessing: (callback) =>
-    @_allowProcessing = false
-    async.doUntil @_waitForStopped, @_safeToStop, callback
-
   stop: (callback=_.noop) =>
-    @_stopProcessing callback
+    tasks = []
+    _.each @dequeuers, (dequeuer) =>
+      tasks.push dequeuer.stop
+    async.parallel tasks, =>
+      async.doUntil @_waitForStopped, (=> @_drained), callback
 
 module.exports = JobManagerResponder

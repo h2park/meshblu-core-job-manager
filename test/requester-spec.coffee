@@ -16,7 +16,7 @@ describe 'JobManagerRequester', ->
     @responseQueueName = "response:queue:#{queueId}"
     @namespace = 'test:job-manager'
     @redisUri = 'localhost'
-    @maxConnections = 1
+    @maxConnections = 2
 
   beforeEach (done) ->
     @client = new RedisNS @namespace, new Redis @redisUri, dropBufferSupport: true

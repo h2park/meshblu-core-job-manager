@@ -23,7 +23,10 @@ class JobManagerResponder extends JobManagerBase
     super
     @dequeuers = []
     _.times Math.ceil(concurrency/3), (x) =>
-      @dequeuers.push new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds, x }
+      @dequeuers.push new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds, x, @onPush }
+
+  onPush: =>
+    @_drained = false
 
   createResponse: ({responseId, response}, callback) =>
     { metadata, data, rawData } = response

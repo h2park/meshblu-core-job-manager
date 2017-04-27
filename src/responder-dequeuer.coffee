@@ -6,7 +6,7 @@ debugSaturation = require('debug')('meshblu-core-job-manager:responder:saturatio
 SimpleBenchmark = require 'simple-benchmark'
 
 class ResponderDequeuer
-  constructor: ({ @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds }) ->
+  constructor: ({ @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds, @x }) ->
 
   start: (callback=_.noop) =>
     @_allowProcessing = true
@@ -38,7 +38,7 @@ class ResponderDequeuer
   enqueueJob: (callback=_.noop) =>
     return _.defer callback if @queue.length() > @queue.concurrency
 
-    benchmark = new SimpleBenchmark label: 'enqueueJob'
+    benchmark = new SimpleBenchmark label: "enqueueJob #{@x}"
     @_enqueuing = true
     @dequeueJob (error, key) =>
       debug benchmark.toString()
@@ -47,7 +47,7 @@ class ResponderDequeuer
       return callback() if error?
       return callback() if _.isEmpty key
       @queue.push key
-      debugSaturation "ql:", @queue.length(), "wl:", @queue.workersList().length
+      debugSaturation @x, "ql:", @queue.length(), "wl:", @queue.workersList().length
       callback()
 
   dequeueJob: (callback) =>

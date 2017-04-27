@@ -21,10 +21,9 @@ class JobManagerResponder extends JobManagerBase
     @queue = async.queue @_work, concurrency
     @queue.empty = => @emit 'empty'
     super
-    @dequeuers = [
-      new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds }
-      new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds }
-    ]
+    @dequeuers = []
+    _.times Math.ceil(concurrency/3), (x) =>
+      @dequeuers.push new ResponderDequeuer { @queue, @_queuePool, @_updateHeartbeat, @requestQueueName, @queueTimeoutSeconds, x }
 
   createResponse: ({responseId, response}, callback) =>
     { metadata, data, rawData } = response

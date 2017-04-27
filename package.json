@@ -1,6 +1,6 @@
 {
   "name": "meshblu-core-job-manager",
-  "version": "11.0.11",
+  "version": "11.0.12",
   "description": "Meshblu Core Job Manager",
   "main": "index.js",
   "directories": {
@@ -32,7 +32,7 @@
     "sinon-chai": "^2.9.0"
   },
   "scripts": {
-    "test": "mocha",
+    "test": "mocha --timeout 5000",
     "coverage": "nyc npm test",
     "mocha:json": "mocha --reporter json > coverage/mocha.json",
     "test:watch": "mocha -w -R mocha-multi --reporter-options spec=-,mocha-osx-reporter=-"

@@ -11,13 +11,13 @@ class JobManagerResponder extends JobManagerBase
     {
       @requestQueueName
       @workerFunc
-      concurrency=1
+      concurrency
     } = options
 
     throw new Error 'JobManagerResponder constructor is missing "requestQueueName"' unless @requestQueueName?
     throw new Error 'JobManagerResponder constructor is missing "workerFunc"' unless @workerFunc?
 
-    {concurrency=1} = options
+    concurrency ?= 1
     @queue = async.queue @_work, concurrency
     @queue.empty = => @emit 'empty'
     super

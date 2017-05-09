@@ -22,7 +22,6 @@ class JobManagerRequester extends JobManagerBase
     super
 
   _addResponseIdToOptions: (options) =>
-    options = _.clone options
     { metadata } = options
     metadata = _.clone metadata
     metadata.responseId ?= @generateResponseId()
@@ -30,7 +29,7 @@ class JobManagerRequester extends JobManagerBase
     return options
 
   _checkMaxQueueLength: (callback) =>
-    return callback() unless @maxQueueLength > 0
+    return _.defer callback unless @maxQueueLength > 0
     @client.llen @requestQueueName, (error, queueLength) =>
       return callback error if error?
       return callback() if queueLength <= @maxQueueLength
@@ -93,7 +92,7 @@ class JobManagerRequester extends JobManagerBase
     request = @_addResponseIdToOptions request
     responseId = _.get request, 'metadata.responseId'
     responseTimeout = null
-    return callback new Error 'do requires metadata.responseId' unless responseId?
+    return _.defer(callback, new Error 'do requires metadata.responseId') unless responseId?
 
     @once "response:#{responseId}", (response) =>
       clearTimeout responseTimeout if responseTimeout?

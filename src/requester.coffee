@@ -78,12 +78,13 @@ class JobManagerRequester extends JobManagerBase
     return # avoid returning redis
 
   createRequest: (options, callback) =>
-    @createForeverRequest options, (error, responseId) =>
-      return callback error if error?
-      @client.expire responseId, @jobTimeoutSeconds, (error) =>
-        delete error.code if error?
+    process.nextTick =>
+      @createForeverRequest options, (error, responseId) =>
         return callback error if error?
-        callback null, responseId
+        @client.expire responseId, @jobTimeoutSeconds, (error) =>
+          delete error.code if error?
+          return callback error if error?
+          callback null, responseId
 
     return # avoid returning redis
 
@@ -104,13 +105,14 @@ class JobManagerRequester extends JobManagerBase
       @removeListener "response:#{responseId}", callback
       callback error
 
-    @createRequest request, (error) =>
-      return @emit "error:#{responseId}", error if error?
-      responseTimeout = setTimeout =>
-        error = new Error('Response timeout exceeded')
-        error.code = 504
-        @emit "error:#{responseId}", error
-      , @jobTimeoutSeconds * 1000
+    process.nextTick =>
+      @createRequest request, (error) =>
+        return @emit "error:#{responseId}", error if error?
+        responseTimeout = setTimeout =>
+          error = new Error('Response timeout exceeded')
+          error.code = 504
+          @emit "error:#{responseId}", error
+        , @jobTimeoutSeconds * 1000
 
   _listenForResponses: (callback) =>
     @pubSubClient.subscribe @responseQueueName
@@ -127,7 +129,8 @@ class JobManagerRequester extends JobManagerBase
         return if _.isEmpty response
         responseId = _.get response, 'metadata.responseId'
 
-        @emit "response:#{responseId}", response
+        process.nextTick =>
+          @emit "response:#{responseId}", response
 
   _getResponse: (key, callback) =>
     @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>

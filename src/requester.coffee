@@ -109,7 +109,7 @@ class JobManagerRequester extends JobManagerBase
         return @emit "error:#{responseId}", error if error?
         responseTimeout = setTimeout =>
           error = new Error('Response timeout exceeded')
-          error.code = 504
+          error.code = 599
           @emit "error:#{responseId}", error
         , @jobTimeoutSeconds * 1000
 

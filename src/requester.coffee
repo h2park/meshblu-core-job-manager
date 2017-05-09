@@ -94,24 +94,19 @@ class JobManagerRequester extends JobManagerBase
     responseTimeout = null
     return _.defer(callback, new Error 'do requires metadata.responseId') unless responseId?
 
-    @once "response:#{responseId}", (response) =>
+    @once "response:#{responseId}", (data) =>
+      [ error, response ] = data
       clearTimeout responseTimeout if responseTimeout?
-      @removeListener "error:#{responseId}", callback
-      callback null, response
+      callback error, response
 
-    @once "error:#{responseId}", (error) =>
-      clearTimeout responseTimeout if responseTimeout?
-      @removeListener "response:#{responseId}", callback
-      callback error
-
-    process.nextTick =>
-      @createRequest request, (error) =>
-        return @emit "error:#{responseId}", error if error?
-        responseTimeout = setTimeout =>
-          error = new Error('Response timeout exceeded')
-          error.code = 599
-          @emit "error:#{responseId}", error
-        , @jobTimeoutSeconds * 1000
+    @createRequest request, (error) =>
+      return @emit "response:#{responseId}", [ error, null ] if error?
+      responseTimeout = setTimeout =>
+        error = new Error('Response timeout exceeded')
+        error.code = 599
+        @emit "response:#{responseId}", [ error, null ]
+      , @jobTimeoutSeconds * 1000
+    return # don't leak anything
 
   _listenForResponses: (callback) =>
     @pubSubClient.subscribe @responseQueueName
@@ -129,7 +124,7 @@ class JobManagerRequester extends JobManagerBase
         responseId = _.get response, 'metadata.responseId'
 
         process.nextTick =>
-          @emit "response:#{responseId}", response
+          @emit "response:#{responseId}", [ null, response ]
 
   _getResponse: (key, callback) =>
     @client.hmget key, ['response:metadata', 'response:data'], (error, data) =>

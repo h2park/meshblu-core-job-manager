@@ -80,6 +80,7 @@ class JobManagerResponder extends JobManagerBase
           if error?
             console.error error.stack
             callback()
+          return callback() if job.metadata.ignoreResponse
           responseId = _.get job, 'metadata.responseId'
           @createResponse {responseId, response}, (error) =>
             console.error error.stack if error?
